@@ -1,211 +1,121 @@
-from typing import Optional
+from __future__ import annotations
+
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 
-REQUIRED_BASE_COLUMNS = ["time"]
-AXIS_COLUMNS = ["gyro_x", "gyro_y", "gyro_z"]
-OPTIONAL_COLUMNS = ["throttle", "setpoint_roll", "setpoint_pitch", "setpoint_yaw"]
 
-COLUMN_ALIASES = {
-    "t": "time",
-    "timestamp": "time",
-    "time_s": "time",
-    "time_sec": "time",
-    "seconds": "time",
-    "roll": "gyro_x",
-    "pitch": "gyro_y",
-    "yaw": "gyro_z",
-    "gyro_roll": "gyro_x",
-    "gyro_pitch": "gyro_y",
-    "gyro_yaw": "gyro_z",
-    "gx": "gyro_x",
-    "gy": "gyro_y",
-    "gz": "gyro_z",
-    "rc_roll": "setpoint_roll",
-    "rc_pitch": "setpoint_pitch",
-    "rc_yaw": "setpoint_yaw",
-    "roll_setpoint": "setpoint_roll",
-    "pitch_setpoint": "setpoint_pitch",
-    "yaw_setpoint": "setpoint_yaw",
-    "setpoint_x": "setpoint_roll",
-    "setpoint_y": "setpoint_pitch",
-    "setpoint_z": "setpoint_yaw",
-    "thr": "throttle",
+MIN_ROWS = 128
+
+
+COLUMN_ALIASES: Dict[str, List[str]] = {
+    "time": ["time", "timestamp", "t"],
+
+    # gyro aliases
+    "gyro_roll": ["gyro_roll", "roll_gyro", "gyro_x", "gx", "roll"],
+    "gyro_pitch": ["gyro_pitch", "pitch_gyro", "gyro_y", "gy", "pitch"],
+    "gyro_yaw": ["gyro_yaw", "yaw_gyro", "gyro_z", "gz", "yaw"],
+
+    # setpoint aliases
+    "roll_setpoint": ["roll_setpoint", "setpoint_roll", "rc_roll", "roll_sp"],
+    "pitch_setpoint": ["pitch_setpoint", "setpoint_pitch", "rc_pitch", "pitch_sp"],
+    "yaw_setpoint": ["yaw_setpoint", "setpoint_yaw", "rc_yaw", "yaw_sp"],
 }
 
-MIN_SAMPLES = 128
+
+def _find_column(df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
+    columns = set(df.columns)
+    for candidate in candidates:
+        if candidate in columns:
+            return candidate
+    return None
 
 
-def _normalize_name(name):
-    name = str(name).strip().lower()
-    for ch in [" ", "-", "/", "\\", "(", ")", "[", "]", "{", "}", ":"]:
-        name = name.replace(ch, "_")
-    while "__" in name:
-        name = name.replace("__", "_")
-    return name.strip("_")
+def _normalize_time_to_seconds(values: np.ndarray) -> np.ndarray:
+    values = np.asarray(values, dtype=float)
+    values = values - values[0]
+    span = float(values[-1] - values[0]) if len(values) > 1 else 0.0
+
+    # likely microseconds
+    if span > 1e6:
+        return values / 1_000_000.0
+
+    # likely milliseconds
+    if span > 1e3:
+        return values / 1_000.0
+
+    return values
 
 
-def _coerce_numeric(df):
-    for col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-    return df
-
-
-def _dedupe_columns(df):
-    cols = []
-    seen = set()
-    for col in df.columns:
-        if col not in seen:
-            cols.append(col)
-            seen.add(col)
-    return df.loc[:, cols]
-
-
-def _sort_and_fix_time(df):
-    if "time" not in df.columns:
-        return df
-
-    df = df.copy()
-    df = df.dropna(subset=["time"])
-    df = df.sort_values("time").reset_index(drop=True)
-    df = df.loc[~df["time"].duplicated(keep="first")].reset_index(drop=True)
-
-    if len(df) >= 2:
-        df["time"] = df["time"] - float(df["time"].iloc[0])
-
-    return df
-
-
-def _repair_time_if_needed(df):
-    if "time" not in df.columns or df["time"].isna().all():
-        df = df.copy()
-        df["time"] = np.arange(len(df), dtype=float) * 0.001
-        return df
-
-    if len(df) < 3:
-        return df
-
-    dt = np.diff(df["time"].to_numpy(dtype=float))
-    finite_dt = dt[np.isfinite(dt)]
-    if len(finite_dt) == 0:
-        df = df.copy()
-        df["time"] = np.arange(len(df), dtype=float) * 0.001
-        return df
-
-    positive_dt = finite_dt[finite_dt > 0]
-    if len(positive_dt) == 0:
-        df = df.copy()
-        df["time"] = np.arange(len(df), dtype=float) * 0.001
-        return df
-
-    median_dt = float(np.median(positive_dt))
-    if median_dt <= 0 or not np.isfinite(median_dt):
-        df = df.copy()
-        df["time"] = np.arange(len(df), dtype=float) * 0.001
-
-    return df
-
-
-def _clip_throttle(df):
-    if "throttle" in df.columns:
-        df = df.copy()
-        col = df["throttle"].to_numpy(dtype=float)
-        finite = col[np.isfinite(col)]
-        if len(finite) and np.nanmax(finite) > 5:
-            col = (col - 1000.0) / 1000.0
-        df["throttle"] = np.clip(col, 0.0, 1.0)
-    return df
-
-
-def _drop_sparse_rows(df):
-    signal_cols = [c for c in REQUIRED_BASE_COLUMNS + AXIS_COLUMNS + OPTIONAL_COLUMNS if c in df.columns]
-    if not signal_cols:
-        return df
-    return df.dropna(thresh=2, subset=signal_cols).reset_index(drop=True)
-
-
-def _fill_small_gaps(df):
-    numeric_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
-    if not numeric_cols:
-        return df
-    df = df.copy()
-    df[numeric_cols] = df[numeric_cols].interpolate(
-        method="linear",
-        limit=5,
-        limit_direction="both",
-    )
-    return df
-
-
-def _validate(df):
-    if df is None or df.empty:
-        return None
-    if "time" not in df.columns:
-        return None
-
-    present_axes = [c for c in AXIS_COLUMNS if c in df.columns]
-    if not present_axes:
-        return None
-    if len(df) < MIN_SAMPLES:
-        return None
-
-    time = df["time"].to_numpy(dtype=float)
-    if np.isnan(time).all():
-        return None
-
-    if len(time) >= 2:
-        dt = np.diff(time)
-        good_dt = dt[np.isfinite(dt) & (dt > 0)]
-        if len(good_dt) == 0:
-            return None
-        median_dt = float(np.median(good_dt))
-        if median_dt <= 0 or not np.isfinite(median_dt):
-            return None
-        sampling_rate = 1.0 / median_dt
-        if sampling_rate < 20 or sampling_rate > 10000:
-            return None
-
-    for axis in present_axes:
-        series = df[axis].to_numpy(dtype=float)
-        finite_ratio = np.isfinite(series).mean()
-        if finite_ratio < 0.8:
-            return None
-        usable = series[np.isfinite(series)]
-        if len(usable) == 0:
-            return None
-        if float(np.nanstd(usable)) < 1e-9:
-            return None
-
-    return df.reset_index(drop=True)
-
-
-def parse_log(file_path):
+def parse_log(file_path: str) -> Optional[pd.DataFrame]:
     try:
         df = pd.read_csv(file_path)
-        if df is None or df.empty:
-            return None
-
-        normalized = [_normalize_name(c) for c in df.columns]
-        normalized = [COLUMN_ALIASES.get(c, c) for c in normalized]
-        df.columns = normalized
-
-        df = _dedupe_columns(df)
-        df = _coerce_numeric(df)
-        df = _drop_sparse_rows(df)
-        df = _repair_time_if_needed(df)
-        df = _sort_and_fix_time(df)
-        df = _fill_small_gaps(df)
-        df = _clip_throttle(df)
-
-        ordered_cols = []
-        for col in REQUIRED_BASE_COLUMNS + AXIS_COLUMNS + OPTIONAL_COLUMNS:
-            if col in df.columns:
-                ordered_cols.append(col)
-
-        other_numeric = [c for c in df.columns if c not in ordered_cols and pd.api.types.is_numeric_dtype(df[c])]
-        df = df[ordered_cols + other_numeric]
-
-        return _validate(df)
     except Exception:
         return None
+
+    if df is None or df.empty:
+        return None
+
+    df.columns = [str(c).strip().lower() for c in df.columns]
+
+    normalized = pd.DataFrame()
+
+    for target, aliases in COLUMN_ALIASES.items():
+        source = _find_column(df, aliases)
+        if source is not None:
+            normalized[target] = pd.to_numeric(df[source], errors="coerce")
+
+    if "time" not in normalized.columns:
+        return None
+
+    gyro_targets = ["gyro_roll", "gyro_pitch", "gyro_yaw"]
+    available_gyro = [c for c in gyro_targets if c in normalized.columns]
+    if not available_gyro:
+        return None
+
+    normalized = normalized.dropna(subset=["time"]).copy()
+    if normalized.empty:
+        return None
+
+    normalized["time"] = _normalize_time_to_seconds(normalized["time"].to_numpy(dtype=float))
+
+    for col in available_gyro:
+        normalized[col] = pd.to_numeric(normalized[col], errors="coerce")
+
+    normalized = normalized.dropna(subset=available_gyro).copy()
+    if len(normalized) < MIN_ROWS:
+        return None
+
+    time_values = normalized["time"].to_numpy(dtype=float)
+    if len(time_values) < 2:
+        return None
+
+    dt = np.diff(time_values)
+    if np.any(~np.isfinite(dt)) or np.any(dt <= 0):
+        return None
+
+    standardized = pd.DataFrame({
+        "time": normalized["time"].to_numpy(dtype=float),
+        "gyro_x": normalized["gyro_roll"].to_numpy(dtype=float) if "gyro_roll" in normalized.columns else np.zeros(len(normalized)),
+        "gyro_y": normalized["gyro_pitch"].to_numpy(dtype=float) if "gyro_pitch" in normalized.columns else np.zeros(len(normalized)),
+        "gyro_z": normalized["gyro_yaw"].to_numpy(dtype=float) if "gyro_yaw" in normalized.columns else np.zeros(len(normalized)),
+    })
+
+    standardized["setpoint_roll"] = (
+        pd.to_numeric(normalized["roll_setpoint"], errors="coerce").fillna(0.0).to_numpy(dtype=float)
+        if "roll_setpoint" in normalized.columns
+        else np.zeros(len(normalized))
+    )
+    standardized["setpoint_pitch"] = (
+        pd.to_numeric(normalized["pitch_setpoint"], errors="coerce").fillna(0.0).to_numpy(dtype=float)
+        if "pitch_setpoint" in normalized.columns
+        else np.zeros(len(normalized))
+    )
+    standardized["setpoint_yaw"] = (
+        pd.to_numeric(normalized["yaw_setpoint"], errors="coerce").fillna(0.0).to_numpy(dtype=float)
+        if "yaw_setpoint" in normalized.columns
+        else np.zeros(len(normalized))
+    )
+
+    return standardized
