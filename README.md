@@ -58,3 +58,22 @@ Generated logs will appear in `sample_logs/`.
 - Renaming the top-level repo folder does not require code changes.
 - Imports are based on the `app` package, not the repo folder name.
 - Upload a CSV log, choose drone size, and review the summary, axis analysis, graphs, and CLI preview.
+## 🚧 Development Notes
+
+- Graph visualization is currently functional but not fully optimized.
+- Future updates will include improved graph performance, clarity, and 
+better frequency highlighting.
+
+- AeroTune is actively under development. All core systems (analysis, PID 
+logic, UI, and data handling) will continue to be refined.
+
+- Real-world validation is planned. Once drone components arrive, AeroTune 
+will be tested using live flight CSV logs from actual hardware.
+
+- These updates will focus on:
+  - Real flight behavior validation
+  - More accurate PID recommendations
+  - Improved signal interpretation under real conditions
+
+This project is evolving toward a fully practical FPV tuning tool backed 
+by both simulation and real flight data.
