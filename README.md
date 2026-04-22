@@ -1,6 +1,6 @@
 # ⚡ AeroTune
 
-<<<<<<< HEAD
+
 <p align="center">
   <b>Control-System Intelligence for PID Tuning</b><br>
   Analyze • Diagnose • Optimize
