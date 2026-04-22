@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AeroTune</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #020617;
+            --panel: #0f172a;
+            --panel-2: #111c34;
+            --border: #21304a;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --accent: #38bdf8;
+            --good: #22c55e;
+            --warn: #f59e0b;
+            --bad: #ef4444;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            background: radial-gradient(circle at top, #0a1630 0%, var(--bg) 42%);
+            color: var(--text);
+            font-family: "Segoe UI", system-ui, sans-serif;
+        }
+
+        .container {
+            width: min(1200px, 94%);
+            margin: 0 auto 40px;
+        }
+
+        .hero {
+            padding: 28px 0 14px;
+        }
+
+        .hero h1 {
+            margin: 0;
+            font-size: 2.2rem;
+            color: var(--accent);
+        }
+
+        .hero p {
+            margin: 8px 0 0;
+            color: var(--muted);
+            max-width: 760px;
+            line-height: 1.55;
+        }
+
+        .card {
+            background: rgba(15, 23, 42, 0.94);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 20px;
+            margin-bottom: 18px;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+        }
+
+        .controls {
+            display: grid;
+            gap: 14px;
+            grid-template-columns: 1.2fr 160px 170px;
+            align-items: end;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        input[type="file"], select, button {
+            width: 100%;
+            border-radius: 10px;
+            border: 1px solid #334155;
+            background: #08101f;
+            color: var(--text);
+            padding: 11px 12px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #2563eb, #0891b2);
+            border: none;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        button:hover {
+            filter: brightness(1.06);
+        }
+
+        .summary-grid, .axis-grid, .meta-grid {
+            display: grid;
+            gap: 16px;
+        }
+
+        .summary-grid {
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        }
+
+        .meta-grid {
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            margin-top: 14px;
+        }
+
+        .metric-box {
+            background: var(--panel-2);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 14px;
+        }
+
+        .metric-label {
+            color: var(--muted);
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            font-size: 1.45rem;
+            font-weight: 700;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+
+        .good { color: var(--good); }
+        .warn { color: var(--warn); }
+        .bad { color: var(--bad); }
+
+        .axis-grid {
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        }
+
+        .axis-card {
+            background: #071120;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 18px;
+        }
+
+        .axis-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .axis-title {
+            font-size: 1.25rem;
+            font-weight: 800;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            background: #13213b;
+            border: 1px solid #2a3c5a;
+            color: var(--muted);
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 7px 0;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+        }
+
+        .row:last-child { border-bottom: none; }
+
+        .row span:first-child {
+            color: var(--muted);
+        }
+
+        .section-title {
+            margin: 16px 0 10px;
+            font-weight: 800;
+            color: var(--accent);
+            font-size: 0.95rem;
+            letter-spacing: 0.02em;
+        }
+
+        .bullet-list {
+            margin: 0;
+            padding-left: 18px;
+            color: var(--text);
+            line-height: 1.5;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 185px;
+            background: #071120;
+            color: #b8ecff;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+
+        .status {
+            min-height: 24px;
+            margin-top: 10px;
+            color: var(--muted);
+        }
+
+        canvas {
+            width: 100%;
+            background: #071120;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            padding: 8px;
+        }
+
+        .hidden { display: none; }
+
+        @media (max-width: 860px) {
+            .controls {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <section class="hero">
+            <h1>⚡ AeroTune</h1>
+            <p>
+                PID-aware FPV tuning analysis focused on stable, efficient high-speed flight.
+                AeroTune reads blackbox-style logs, identifies vibration trends, evaluates
+                gyro-to-setpoint tracking, and turns that into safer tuning direction.
+            </p>
+        </section>
+
+        <section class="card">
+            <div class="controls">
+                <div class="input-group">
+                    <label for="fileInput">Flight log CSV</label>
+                    <input type="file" id="fileInput" accept=".csv">
+                </div>
+                <div class="input-group">
+                    <label for="droneSize">Drone size</label>
+                    <select id="droneSize">
+                        <option value="1">1\"</option>
+                        <option value="2">2\"</option>
+                        <option value="3">3\"</option>
+                        <option value="4">4\"</option>
+                        <option value="5">5\"</option>
+                        <option value="7" selected>7\"</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>&nbsp;</label>
+                    <button onclick="uploadFile()">Analyze log</button>
+                </div>
+            </div>
+            <div class="status" id="statusBox">Upload a CSV to begin.</div>
+        </section>
+
+        <section class="card hidden" id="summaryCard">
+            <h3>Run Summary</h3>
+            <div class="summary-grid" id="summaryGrid"></div>
+            <div class="meta-grid" id="metaGrid"></div>
+            <div class="section-title">AeroTune Notes</div>
+            <ul class="bullet-list" id="summaryNotes"></ul>
+        </section>
+
+        <section class="card hidden" id="axisCard">
+            <h3>Axis Analysis</h3>
+            <div class="axis-grid" id="axisContainer"></div>
+        </section>
+
+        <section class="card hidden" id="cliCard">
+            <h3>Betaflight CLI Preview</h3>
+            <textarea id="cliBox" readonly></textarea>
+            <div style="margin-top: 10px;">
+                <button onclick="copyCLI()">Copy CLI</button>
+            </div>
+        </section>
+
+        <section class="card hidden" id="gyroCard">
+            <h3>Gyro vs Setpoint</h3>
+            <canvas id="gyroChart"></canvas>
+        </section>
+
+        <section class="card hidden" id="fftCard">
+            <h3>Frequency Spectrum</h3>
+            <canvas id="freqChart"></canvas>
+        </section>
+    </div>
+
+<script>
+let gyroChart = null;
+let freqChart = null;
+
+function severityClass(severity) {
+    if (severity === "high") return "bad";
+    if (severity === "medium") return "warn";
+    return "good";
+}
+
+function scoreClass(score) {
+    if (score >= 80) return "good";
+    if (score >= 60) return "warn";
+    return "bad";
+}
+
+function formatMaybe(value, suffix = "") {
+    if (value === null || value === undefined || Number.isNaN(value)) return "N/A";
+    return `${value}${suffix}`;
+}
+
+function formatPercentRatio(value) {
+    if (value === null || value === undefined || Number.isNaN(value)) return "N/A";
+    return `${(value * 100).toFixed(1)}%`;
+}
+
+function dominantBandFromRatios(band) {
+    if (!band) return null;
+    const values = [
+        { key: "low", value: Number(band.low || 0) },
+        { key: "mid", value: Number(band.mid || 0) },
+        { key: "high", value: Number(band.high || 0) }
+    ];
+    values.sort((a, b) => b.value - a.value);
+    return values[0].value > 0 ? values[0].key : null;
+}
+
+function setStatus(message, level = "info") {
+    const box = document.getElementById("statusBox");
+    box.textContent = message;
+    box.className = `status ${level === "error" ? "bad" : level === "ok" ? "good" : ""}`;
+}
+
+function showResults() {
+    ["summaryCard", "axisCard", "cliCard", "gyroCard", "fftCard"].forEach(id => {
+        document.getElementById(id).classList.remove("hidden");
+    });
+}
+
+async function uploadFile() {
+    const file = document.getElementById("fileInput").files[0];
+    const droneSize = document.getElementById("droneSize").value;
+
+    if (!file) {
+        setStatus("Choose a CSV file first.", "error");
+        return;
+    }
+
+    setStatus("Analyzing log...", "info");
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("drone_size", droneSize);
+
+    try {
+        const res = await fetch("/upload-log", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || data.error) {
+            throw new Error(data.error || "Analysis failed");
+        }
+
+        const analysis = data.analysis;
+        renderSummary(data, analysis);
+        renderAxes(analysis.analysis || {});
+        generateCLI(analysis.analysis || {});
+        await loadGraph();
+        showResults();
+        setStatus(`Analysis complete for ${data.filename}`, "ok");
+    } catch (err) {
+        setStatus(err.message, "error");
+    }
+}
+
+function renderSummary(payload, analysis) {
+    const summaryGrid = document.getElementById("summaryGrid");
+    const metaGrid = document.getElementById("metaGrid");
+    const notes = document.getElementById("summaryNotes");
+
+    summaryGrid.innerHTML = `
+        <div class="metric-box">
+            <div class="metric-label">Overall Score</div>
+            <div class="metric-value ${scoreClass(Number(analysis.overall_score || 0))}">${formatMaybe(analysis.overall_score)}</div>
+        </div>
+        <div class="metric-box">
+            <div class="metric-label">Rating</div>
+            <div class="metric-value ${scoreClass(Number(analysis.overall_score || 0))}">${formatMaybe(analysis.rating)}</div>
+        </div>
+        <div class="metric-box">
+            <div class="metric-label">Sampling Rate</div>
+            <div class="metric-value">${formatMaybe(analysis.sampling_rate_hz, " Hz")}</div>
+        </div>
+        <div class="metric-box">
+            <div class="metric-label">Rows Parsed</div>
+            <div class="metric-value">${formatMaybe(payload.rows)}</div>
+        </div>
+    `;
+
+    metaGrid.innerHTML = `
+        <div class="metric-box">
+            <div class="metric-label">Tuning Goal</div>
+            <div class="metric-value" style="font-size:1rem;">Stable high-speed efficiency</div>
+        </div>
+        <div class="metric-box">
+            <div class="metric-label">Columns Parsed</div>
+            <div class="metric-value" style="font-size:1rem;">${(payload.columns || []).join(", ") || "N/A"}</div>
+        </div>
+    `;
+
+    const summaryNotes = Array.isArray(analysis.summary_notes) && analysis.summary_notes.length
+        ? analysis.summary_notes
+        : ["Use the axis cards and graphs together before changing tune values."];
+    notes.innerHTML = summaryNotes.map(n => `<li>${n}</li>`).join("");
+}
+
+function renderAxes(axes) {
+    const container = document.getElementById("axisContainer");
+    container.innerHTML = "";
+
+    for (const key in axes) {
+        const a = axes[key] || {};
+        const severity = severityClass(a.severity);
+        const tracking = a.tracking || {};
+        const band = a.band_energy_ratio || {};
+        const dominantBand = a.dominant_band || dominantBandFromRatios(band) || "n/a";
+        const displayedPeak = a.peak_frequency_hz;
+        const globalPeak = a.global_peak_hz !== undefined ? a.global_peak_hz : a.peak_frequency_hz;
+        const tuningObjective = a.tuning_objective || "Push for clean, controlled response without wasting motor energy in vibration.";
+
+        const notes = []
+            .concat(Array.isArray(a.explanation) ? a.explanation : [])
+            .concat(Array.isArray(tracking.tuning_notes) ? tracking.tuning_notes : []);
+
+        const html = `
+            <div class="axis-card">
+                <div class="axis-header">
+                    <div>
+                        <div class="axis-title">${a.axis_name || key.toUpperCase()}</div>
+                        <div class="pill ${severity}">${a.issue || "No issue text available"}</div>
+                    </div>
+                    <div class="pill">Band: ${String(dominantBand).toUpperCase()}</div>
+                </div>
+
+                <div class="row"><span>Displayed Peak</span><span>${formatMaybe(displayedPeak, " Hz")}</span></div>
+                <div class="row"><span>Global Peak</span><span>${formatMaybe(globalPeak, " Hz")}</span></div>
+                <div class="row"><span>Axis Score</span><span class="${scoreClass(Number(a.axis_score || 0))}">${formatMaybe(a.axis_score)}</span></div>
+                <div class="row"><span>Expected Score</span><span class="${scoreClass(Number(a.expected_score || 0))}">${formatMaybe(a.expected_score)}</span></div>
+                <div class="row"><span>Estimated RPM</span><span>${formatMaybe(a.rpm_estimate)}</span></div>
+                <div class="row"><span>Propwash</span><span>${a.propwash_detected ? "YES" : "NO"}</span></div>
+
+                <div class="section-title">Energy Split</div>
+                <div class="row"><span>Low</span><span>${formatPercentRatio(band.low)}</span></div>
+                <div class="row"><span>Mid</span><span>${formatPercentRatio(band.mid)}</span></div>
+                <div class="row"><span>High</span><span>${formatPercentRatio(band.high)}</span></div>
+
+                <div class="section-title">Tracking</div>
+                <div class="row"><span>Tracking Score</span><span>${formatMaybe(tracking.tracking_score)}</span></div>
+                <div class="row"><span>Delay</span><span>${formatMaybe(tracking.delay_ms, " ms")}</span></div>
+                <div class="row"><span>Overshoot</span><span>${formatMaybe(tracking.overshoot)}</span></div>
+
+                <div class="section-title">Recommended PID</div>
+                <div class="row"><span>P</span><span>${a.recommended_pid ? a.recommended_pid.P : "N/A"} (${a.pid_suggestions ? a.pid_suggestions.p_adjustment_percent : "N/A"}%)</span></div>
+                <div class="row"><span>D</span><span>${a.recommended_pid ? a.recommended_pid.D : "N/A"} (${a.pid_suggestions ? a.pid_suggestions.d_adjustment_percent : "N/A"}%)</span></div>
+                <div class="row"><span>FF</span><span>${a.recommended_pid ? a.recommended_pid.FF : "N/A"} (${a.pid_suggestions ? a.pid_suggestions.ff_adjustment_percent : "N/A"}%)</span></div>
+
+                <div class="section-title">AeroTune Objective</div>
+                <ul class="bullet-list">
+                    <li>${tuningObjective}</li>
+                    ${notes.length ? notes.map(item => `<li>${item}</li>`).join("") : "<li>No detailed notes available.</li>"}
+                </ul>
+            </div>
+        `;
+        container.innerHTML += html;
+    }
+}
+
+function generateCLI(axes) {
+    const lines = [
+        "# AeroTune CLI preview",
+        "# Goal: stable, efficient high-speed flight"
+    ];
+
+    if (axes.gyro_x && axes.gyro_x.recommended_pid) {
+        lines.push(`set p_roll = ${axes.gyro_x.recommended_pid.P}`);
+        lines.push(`set d_roll = ${axes.gyro_x.recommended_pid.D}`);
+        lines.push(`set feedforward_roll = ${axes.gyro_x.recommended_pid.FF}`);
+    }
+
+    if (axes.gyro_y && axes.gyro_y.recommended_pid) {
+        lines.push(`set p_pitch = ${axes.gyro_y.recommended_pid.P}`);
+        lines.push(`set d_pitch = ${axes.gyro_y.recommended_pid.D}`);
+        lines.push(`set feedforward_pitch = ${axes.gyro_y.recommended_pid.FF}`);
+    }
+
+    if (axes.gyro_z && axes.gyro_z.recommended_pid) {
+        lines.push(`set p_yaw = ${axes.gyro_z.recommended_pid.P}`);
+        lines.push(`set feedforward_yaw = ${axes.gyro_z.recommended_pid.FF}`);
+    }
+
+    const refAxis = axes.gyro_x || axes.gyro_y || axes.gyro_z;
+    if (refAxis && refAxis.peak_frequency_hz) {
+        lines.push("");
+        lines.push("# Reference frequency insight");
+        lines.push(`# displayed_peak_hz = ${refAxis.peak_frequency_hz}`);
+        if (refAxis.global_peak_hz !== undefined) {
+            lines.push(`# global_peak_hz = ${refAxis.global_peak_hz}`);
+        }
+        if (refAxis.rpm_estimate) {
+            lines.push(`# estimated_motor_order_rpm = ${refAxis.rpm_estimate}`);
+        }
+    }
+
+    lines.push("");
+    lines.push("save");
+
+    document.getElementById("cliBox").value = lines.join("\n");
+}
+
+function copyCLI() {
+    const box = document.getElementById("cliBox");
+    box.select();
+    document.execCommand("copy");
+    setStatus("CLI copied to clipboard.", "ok");
+}
+
+function makePeakMarker(plotData, maxY) {
+    if (!plotData || !plotData.peak_frequency_hz) return [];
+    return [{
+        label: `Peak ${plotData.peak_frequency_hz} Hz`,
+        data: [
+            { x: plotData.peak_frequency_hz, y: 0 },
+            { x: plotData.peak_frequency_hz, y: maxY }
+        ],
+        parsing: false,
+        borderWidth: 1.2,
+        pointRadius: 0,
+        fill: false
+    }];
+}
+
+async function loadGraph() {
+    const res = await fetch("/plot");
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+        throw new Error(data.error || "Could not load plot data");
+    }
+
+    const timeSlice = 700;
+    const freqSlice = 700;
+    const magSlice = data.magnitude.slice(0, freqSlice);
+    const maxY = magSlice.length ? Math.max(...magSlice, 1) : 1;
+
+    if (gyroChart) gyroChart.destroy();
+    if (freqChart) freqChart.destroy();
+
+    gyroChart = new Chart(document.getElementById("gyroChart"), {
+        type: "line",
+        data: {
+            labels: data.time.slice(0, timeSlice),
+            datasets: [
+                { label: "Gyro", data: data.gyro.slice(0, timeSlice), borderWidth: 1.4, pointRadius: 0 },
+                { label: "Setpoint", data: data.setpoint.slice(0, timeSlice), borderWidth: 1.2, pointRadius: 0 },
+                { label: "Smoothed", data: data.simulated.slice(0, timeSlice), borderWidth: 1.2, pointRadius: 0 }
+            ]
+        },
+        options: {
+            responsive: true,
+            animation: false,
+            scales: {
+                x: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(148,163,184,0.08)" } },
+                y: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(148,163,184,0.08)" } }
+            },
+            plugins: {
+                legend: { labels: { color: "#e2e8f0" } }
+            }
+        }
+    });
+
+    freqChart = new Chart(document.getElementById("freqChart"), {
+        type: "line",
+        data: {
+            datasets: [
+                {
+                    label: "Magnitude",
+                    data: data.freqs.slice(0, freqSlice).map((x, i) => ({ x, y: data.magnitude[i] })),
+                    parsing: false,
+                    borderWidth: 1.4,
+                    pointRadius: 0
+                },
+                ...makePeakMarker(data, maxY)
+            ]
+        },
+        options: {
+            responsive: true,
+            animation: false,
+            scales: {
+                x: {
+                    type: "linear",
+                    ticks: { color: "#94a3b8" },
+                    grid: { color: "rgba(148,163,184,0.08)" },
+                    title: { display: true, text: "Frequency (Hz)", color: "#94a3b8" }
+                },
+                y: {
+                    ticks: { color: "#94a3b8" },
+                    grid: { color: "rgba(148,163,184,0.08)" },
+                    title: { display: true, text: "Magnitude", color: "#94a3b8" }
+                }
+            },
+            plugins: {
+                legend: { labels: { color: "#e2e8f0" } }
+            }
+        }
+    });
+}
+</script>
+</body>
+</html>
