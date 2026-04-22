@@ -1,664 +1,834 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AeroTune</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        :root {
-            --bg: #020617;
-            --panel: #0f172a;
-            --panel-2: #111c34;
-            --border: #21304a;
-            --text: #e2e8f0;
-            --muted: #94a3b8;
-            --accent: #38bdf8;
-            --good: #22c55e;
-            --warn: #f59e0b;
-            --bad: #ef4444;
-        }
+  <meta charset="utf-8" />
+  <title>AeroTune</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-1: #eef6ff;
+      --bg-2: #f8fbff;
+      --card: rgba(255, 255, 255, 0.82);
+      --card-strong: rgba(255, 255, 255, 0.92);
+      --border: rgba(100, 140, 190, 0.18);
+      --text: #16314f;
+      --muted: #5c7592;
+      --accent: #2c7df0;
+      --accent-2: #39b8ff;
+      --good: #1f9d5a;
+      --warn: #d28a00;
+      --bad: #d64545;
+      --shadow: 0 18px 50px rgba(38, 90, 165, 0.12);
+      --radius: 20px;
+    }
 
-        * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
-        body {
-            margin: 0;
-            background: radial-gradient(circle at top, #0a1630 0%, var(--bg) 42%);
-            color: var(--text);
-            font-family: "Segoe UI", system-ui, sans-serif;
-        }
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(90, 170, 255, 0.20), transparent 30%),
+        radial-gradient(circle at top right, rgba(0, 210, 255, 0.16), transparent 28%),
+        linear-gradient(180deg, var(--bg-1), var(--bg-2));
+      min-height: 100vh;
+    }
 
-        .container {
-            width: min(1200px, 94%);
-            margin: 0 auto 40px;
-        }
+    .wrap {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 28px 18px 40px;
+    }
 
-        .hero {
-            padding: 28px 0 14px;
-        }
+    .hero {
+      background: linear-gradient(135deg, rgba(44,125,240,0.92), rgba(57,184,255,0.86));
+      color: white;
+      border-radius: 28px;
+      padding: 26px;
+      box-shadow: 0 18px 60px rgba(32, 110, 210, 0.22);
+      margin-bottom: 20px;
+      position: relative;
+      overflow: hidden;
+    }
 
-        .hero h1 {
-            margin: 0;
-            font-size: 2.2rem;
-            color: var(--accent);
-        }
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -80px;
+      top: -80px;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.14);
+      filter: blur(6px);
+    }
 
-        .hero p {
-            margin: 8px 0 0;
-            color: var(--muted);
-            max-width: 760px;
-            line-height: 1.55;
-        }
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: 2.2rem;
+      letter-spacing: -0.02em;
+    }
 
-        .card {
-            background: rgba(15, 23, 42, 0.94);
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 20px;
-            margin-bottom: 18px;
-            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
-        }
+    .hero p {
+      margin: 0;
+      max-width: 780px;
+      color: rgba(255,255,255,0.92);
+      line-height: 1.5;
+    }
 
-        .controls {
-            display: grid;
-            gap: 14px;
-            grid-template-columns: 1.2fr 160px 170px;
-            align-items: end;
-        }
+    .card {
+      background: var(--card);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      margin-bottom: 18px;
+    }
 
-        .input-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-        }
+    .card h2, .card h3, .card h4 {
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
 
-        input[type="file"], select, button {
-            width: 100%;
-            border-radius: 10px;
-            border: 1px solid #334155;
-            background: #08101f;
-            color: var(--text);
-            padding: 11px 12px;
-        }
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
 
-        button {
-            background: linear-gradient(135deg, #2563eb, #0891b2);
-            border: none;
-            font-weight: 700;
-            cursor: pointer;
-        }
+    .grid-2 {
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
 
-        button:hover {
-            filter: brightness(1.06);
-        }
+    .grid-3 {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
 
-        .summary-grid, .axis-grid, .meta-grid {
-            display: grid;
-            gap: 16px;
-        }
+    .axis-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    }
 
-        .summary-grid {
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        }
+    label {
+      display: block;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
 
-        .meta-grid {
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            margin-top: 14px;
-        }
+    input[type="file"],
+    input[type="number"],
+    select,
+    button,
+    textarea {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid rgba(91, 132, 182, 0.22);
+      background: rgba(255,255,255,0.95);
+      color: var(--text);
+      padding: 12px 14px;
+      font-size: 0.98rem;
+      transition: 0.18s ease;
+    }
 
-        .metric-box {
-            background: var(--panel-2);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 14px;
-        }
+    input[type="file"]:focus,
+    input[type="number"]:focus,
+    select:focus,
+    textarea:focus {
+      outline: none;
+      border-color: rgba(44, 125, 240, 0.48);
+      box-shadow: 0 0 0 4px rgba(44, 125, 240, 0.10);
+    }
 
-        .metric-label {
-            color: var(--muted);
-            font-size: 0.85rem;
-            margin-bottom: 8px;
-        }
+    button {
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white;
+      font-weight: 800;
+      border: none;
+      box-shadow: 0 10px 24px rgba(44, 125, 240, 0.25);
+    }
 
-        .metric-value {
-            font-size: 1.45rem;
-            font-weight: 700;
-            line-height: 1.35;
-            word-break: break-word;
-        }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 28px rgba(44, 125, 240, 0.28);
+    }
 
-        .good { color: var(--good); }
-        .warn { color: var(--warn); }
-        .bad { color: var(--bad); }
+    .status {
+      margin-top: 14px;
+      font-weight: 800;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid rgba(92, 117, 146, 0.16);
+    }
 
-        .axis-grid {
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-        }
+    .good { color: var(--good); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
 
-        .axis-card {
-            background: #071120;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 18px;
-        }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(92, 117, 146, 0.14);
+    }
 
-        .axis-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
+    .row:last-child {
+      border-bottom: none;
+    }
 
-        .axis-title {
-            font-size: 1.25rem;
-            font-weight: 800;
-        }
+    .metric-grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      margin-top: 10px;
+    }
 
-        .pill {
-            display: inline-block;
-            padding: 6px 10px;
-            border-radius: 999px;
-            font-size: 0.78rem;
-            font-weight: 700;
-            background: #13213b;
-            border: 1px solid #2a3c5a;
-            color: var(--muted);
-        }
+    .metric-box {
+      background: var(--card-strong);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+    }
 
-        .row {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 7px 0;
-            border-bottom: 1px solid rgba(148, 163, 184, 0.08);
-        }
+    .metric-label {
+      font-size: 0.84rem;
+      color: var(--muted);
+      font-weight: 700;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
 
-        .row:last-child { border-bottom: none; }
+    .metric-value {
+      font-size: 1.08rem;
+      font-weight: 800;
+      color: var(--text);
+    }
 
-        .row span:first-child {
-            color: var(--muted);
-        }
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 8px 0 12px;
+    }
 
-        .section-title {
-            margin: 16px 0 10px;
-            font-weight: 800;
-            color: var(--accent);
-            font-size: 0.95rem;
-            letter-spacing: 0.02em;
-        }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.88rem;
+      font-weight: 800;
+      background: rgba(44, 125, 240, 0.08);
+      color: var(--text);
+      border: 1px solid rgba(44, 125, 240, 0.12);
+    }
 
-        .bullet-list {
-            margin: 0;
-            padding-left: 18px;
-            color: var(--text);
-            line-height: 1.5;
-        }
+    .pill.good {
+      background: rgba(31, 157, 90, 0.10);
+      border-color: rgba(31, 157, 90, 0.16);
+      color: var(--good);
+    }
 
-        textarea {
-            width: 100%;
-            min-height: 185px;
-            background: #071120;
-            color: #b8ecff;
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 12px;
-            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        }
+    .pill.warn {
+      background: rgba(210, 138, 0, 0.10);
+      border-color: rgba(210, 138, 0, 0.16);
+      color: var(--warn);
+    }
 
-        .status {
-            min-height: 24px;
-            margin-top: 10px;
-            color: var(--muted);
-        }
+    .axis-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
 
-        canvas {
-            width: 100%;
-            background: #071120;
-            border-radius: 14px;
-            border: 1px solid var(--border);
-            padding: 8px;
-        }
+    .axis-card h3 {
+      margin-bottom: 8px;
+      font-size: 1.35rem;
+    }
 
-        .hidden { display: none; }
+    .section-title {
+      margin-top: 16px;
+      margin-bottom: 10px;
+      font-size: 0.95rem;
+      font-weight: 900;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
 
-        @media (max-width: 860px) {
-            .controls {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+    .soft-note,
+    .warning-banner {
+      border-radius: 16px;
+      padding: 12px 14px;
+      margin-top: 12px;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+
+    .soft-note {
+      background: rgba(44, 125, 240, 0.07);
+      border: 1px solid rgba(44, 125, 240, 0.12);
+      color: var(--text);
+    }
+
+    .warning-banner {
+      background: rgba(210, 138, 0, 0.10);
+      border: 1px solid rgba(210, 138, 0, 0.20);
+      color: #9a6500;
+    }
+
+    ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+    }
+
+    li {
+      margin-bottom: 7px;
+      color: var(--text);
+    }
+
+    textarea {
+      min-height: 240px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    canvas {
+      background: rgba(255,255,255,0.88);
+      border-radius: 16px;
+      padding: 10px;
+      border: 1px solid rgba(91, 132, 182, 0.12);
+    }
+
+    .tiny {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    @media (max-width: 700px) {
+      .hero h1 {
+        font-size: 1.8rem;
+      }
+      .wrap {
+        padding: 18px 12px 30px;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <section class="hero">
-            <h1>⚡ AeroTune</h1>
-            <p>
-                PID-aware PID-controlled tuning analysis focused on stable, efficient high-speed flight.
-                AeroTune reads blackbox-style logs, identifies vibration trends, evaluates
-                gyro-to-setpoint tracking, and turns that into safer tuning direction.
-            </p>
-        </section>
-
-        <section class="card">
-            <div class="controls">
-                <div class="input-group">
-                    <label for="fileInput">Flight log CSV</label>
-                    <input type="file" id="fileInput" accept=".csv">
-                </div>
-                <div class="input-group">
-                    <label for="droneSize">Drone size</label>
-                    <select id="droneSize">
-                        <option value="1">1\"</option>
-                        <option value="2">2\"</option>
-                        <option value="3">3\"</option>
-                        <option value="4">4\"</option>
-                        <option value="5">5\"</option>
-                        <option value="7" selected>7\"</option>
-                    </select>
-                </div>
-                <div class="input-group">
-                    <label>&nbsp;</label>
-                    <button onclick="uploadFile()">Analyze log</button>
-                </div>
-            </div>
-            <div class="status" id="statusBox">Upload a CSV to begin.</div>
-        </section>
-
-        <section class="card hidden" id="summaryCard">
-            <h3>Run Summary</h3>
-            <div class="summary-grid" id="summaryGrid"></div>
-            <div class="meta-grid" id="metaGrid"></div>
-            <div class="section-title">AeroTune Notes</div>
-            <ul class="bullet-list" id="summaryNotes"></ul>
-        </section>
-
-        <section class="card hidden" id="axisCard">
-            <h3>Axis Analysis</h3>
-            <div class="axis-grid" id="axisContainer"></div>
-        </section>
-
-        <section class="card hidden" id="cliCard">
-            <h3>Betaflight CLI Preview</h3>
-            <textarea id="cliBox" readonly></textarea>
-            <div style="margin-top: 10px;">
-                <button onclick="copyCLI()">Copy CLI</button>
-            </div>
-        </section>
-
-        <section class="card hidden" id="gyroCard">
-            <h3>Gyro vs Setpoint</h3>
-            <canvas id="gyroChart"></canvas>
-        </section>
-
-        <section class="card hidden" id="fftCard">
-            <h3>Frequency Spectrum</h3>
-            <canvas id="freqChart"></canvas>
-        </section>
+  <div class="wrap">
+    <div class="hero">
+      <h1>⚡ AeroTune</h1>
+      <p>
+        Smarter PID log review with simple pilot goals. Pick your drone size, choose the feel you want,
+        upload a CSV, and AeroTune will return conservative real percentage changes for P, D, and FF.
+      </p>
     </div>
 
-<script>
-let gyroChart = null;
-let freqChart = null;
+    <div class="card">
+      <h2>Upload & Tune Goal</h2>
 
-function formatMaybe(value, suffix = "") {
-  if (value === null || value === undefined || value === "") return "N/A";
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) return "N/A";
-    return `${value}${suffix}`;
-  }
-  return `${value}${suffix}`;
-}
-
-function formatFixed(value, digits = 2, suffix = "") {
-  if (value === null || value === undefined || !Number.isFinite(Number(value))) return "N/A";
-  return `${Number(value).toFixed(digits)}${suffix}`;
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function setStatus(message, type = "info") {
-  const status = document.getElementById("statusBox");
-  if (!status) return;
-  status.textContent = message;
-  status.className = `status ${type}`;
-}
-
-function deltaToPercentText(value) {
-  const n = Number(value || 0);
-  const pct = n * 100;
-  if (Math.abs(pct) < 0.05) return "0.0%";
-  return `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%`;
-}
-
-function issueLabel(issue) {
-  if (!issue) return "unknown";
-  return String(issue).replaceAll("_", " ");
-}
-
-function validPill(valid) {
-  return valid ? "good" : "warn";
-}
-
-function dominantBandFromSignal(signal) {
-  const low = Number(signal?.low_band_energy || 0);
-  const mid = Number(signal?.mid_band_energy || 0);
-  const high = Number(signal?.high_band_energy || 0);
-
-  if (low >= mid && low >= high) return "LOW";
-  if (mid >= low && mid >= high) return "MID";
-  if (high >= low && high >= mid) return "HIGH";
-  return "N/A";
-}
-
-async function uploadFile() {
-  const fileInput = document.getElementById("fileInput");
-  const sizeInput = document.getElementById("droneSize");
-
-  if (!fileInput || !fileInput.files || !fileInput.files.length) {
-    setStatus("Choose a CSV log first.", "error");
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append("file", fileInput.files[0]);
-  formData.append("drone_size", sizeInput ? sizeInput.value : "7");
-
-  setStatus("Analyzing log...", "info");
-
-  try {
-    const res = await fetch("/upload-log", {
-      method: "POST",
-      body: formData
-    });
-
-    const payload = await res.json();
-    if (!res.ok) {
-      throw new Error(payload.error || "Upload failed.");
-    }
-
-    const analysis = payload.analysis || {};
-    renderSummary(payload, analysis);
-    renderAxes(analysis.axes || {});
-    renderCLI(analysis);
-    await renderPlots();
-
-    document.getElementById("summaryCard")?.classList.remove("hidden");
-    document.getElementById("axisCard")?.classList.remove("hidden");
-    document.getElementById("cliCard")?.classList.remove("hidden");
-
-    setStatus(
-      analysis.valid_for_pid
-        ? "Analysis complete. Conservative PID deltas available."
-        : "Analysis complete. Diagnosis available, but PID changes are gated.",
-      analysis.valid_for_pid ? "success" : "warn"
-    );
-  } catch (err) {
-    setStatus(err.message || "Analysis failed.", "error");
-  }
-}
-
-function renderSummary(payload, analysis) {
-  const summaryGrid = document.getElementById("summaryGrid");
-  const metaGrid = document.getElementById("metaGrid");
-  const notes = document.getElementById("summaryNotes");
-
-  const warnings = Array.isArray(analysis.warnings) ? analysis.warnings : [];
-  const actions = Array.isArray(analysis.global_actions) ? analysis.global_actions : [];
-
-  summaryGrid.innerHTML = `
-    <div class="metric-box">
-      <div class="metric-label">PID Guidance</div>
-      <div class="metric-value ${analysis.valid_for_pid ? "good" : "warn"}">
-        ${analysis.valid_for_pid ? "Conservative deltas available" : "Diagnosis only / limited"}
-      </div>
-    </div>
-
-    <div class="metric-box">
-      <div class="metric-label">Sampling Rate</div>
-      <div class="metric-value">${formatFixed(analysis.sample_rate_hz, 2, " Hz")}</div>
-    </div>
-
-    <div class="metric-box">
-      <div class="metric-label">Log Duration</div>
-      <div class="metric-value">${formatFixed(analysis.duration_s, 3, " s")}</div>
-    </div>
-
-    <div class="metric-box">
-      <div class="metric-label">Rows Parsed</div>
-      <div class="metric-value">${formatMaybe(payload.rows)}</div>
-    </div>
-  `;
-
-  metaGrid.innerHTML = `
-    <div class="metric-box">
-      <div class="metric-label">Drone Size</div>
-      <div class="metric-value">${escapeHtml(analysis.drone_size || "N/A")}</div>
-    </div>
-
-    <div class="metric-box">
-      <div class="metric-label">Summary</div>
-      <div class="metric-value" style="font-size:1rem;">${escapeHtml(analysis.summary || "No summary available.")}</div>
-    </div>
-
-    <div class="metric-box">
-      <div class="metric-label">Columns Parsed</div>
-      <div class="metric-value" style="font-size:1rem;">${escapeHtml((payload.columns || []).join(", ") || "N/A")}</div>
-    </div>
-  `;
-
-  const noteItems = []
-    .concat(warnings.map(w => `Warning: ${w}`))
-    .concat(actions.map(a => `Action: ${a}`));
-
-  notes.innerHTML = noteItems.length
-    ? noteItems.map(n => `<li>${escapeHtml(n)}</li>`).join("")
-    : `<li>Use the axis cards and plots together before making tune changes.</li>`;
-}
-
-function renderAxes(axes) {
-  const container = document.getElementById("axisContainer");
-  container.innerHTML = "";
-
-  for (const axisName of ["roll", "pitch", "yaw"]) {
-    const a = axes[axisName];
-    if (!a) continue;
-
-    const signal = a.signal || {};
-    const tracking = a.tracking || {};
-    const pid = a.pid_delta_pct || {};
-    const warnings = Array.isArray(a.warnings) ? a.warnings : [];
-    const actions = Array.isArray(a.actions) ? a.actions : [];
-
-    const html = `
-      <div class="axis-card">
-        <div class="axis-header">
-          <div>
-            <div class="axis-title">${escapeHtml(a.axis_name || axisName.toUpperCase())}</div>
-            <div class="pill ${validPill(a.valid_for_pid)}">${escapeHtml(issueLabel(a.issue))}</div>
-          </div>
-          <div class="pill">Band: ${escapeHtml(dominantBandFromSignal(signal))}</div>
+      <div class="grid grid-2">
+        <div>
+          <label for="logFile">CSV Log File</label>
+          <input id="logFile" type="file" accept=".csv" />
         </div>
 
-        <div class="row"><span>Status</span><span>${a.valid_for_pid ? "PID deltas allowed" : "Diagnosis only"}</span></div>
-        <div class="row"><span>Confidence</span><span>${formatFixed(a.confidence, 3)}</span></div>
-        <div class="row"><span>Dominant Frequency</span><span>${formatFixed(signal.dominant_freq_hz, 2, " Hz")}</span></div>
-        <div class="row"><span>Spectral Centroid</span><span>${formatFixed(signal.spectral_centroid_hz, 2, " Hz")}</span></div>
-        <div class="row"><span>RMS</span><span>${formatFixed(signal.rms, 4)}</span></div>
-        <div class="row"><span>Peak-to-Peak</span><span>${formatFixed(signal.peak_to_peak, 4)}</span></div>
+        <div>
+          <label for="droneSize">Drone Size</label>
+          <select id="droneSize">
+            <option value="7" selected>7 inch</option>
+            <option value="5">5 inch</option>
+          </select>
+        </div>
 
-        <div class="section-title">Tracking</div>
-        <div class="row"><span>Usable</span><span>${tracking.usable ? "YES" : "NO"}</span></div>
-        <div class="row"><span>Correlation</span><span>${formatFixed(tracking.corr, 4)}</span></div>
-        <div class="row"><span>Lag</span><span>${formatFixed(tracking.lag_ms, 2, " ms")}</span></div>
-        <div class="row"><span>Error RMS</span><span>${formatFixed(tracking.tracking_error_rms, 4)}</span></div>
+        <div>
+          <label for="tuningMode">Tune Goal</label>
+          <select id="tuningMode">
+            <option value="efficiency" selected>Efficiency</option>
+            <option value="efficiency_snappy">Efficiency + Snappy</option>
+            <option value="efficiency_floaty">Efficiency + Floaty</option>
+            <option value="snappy">Snappy</option>
+            <option value="floaty">Floaty</option>
+          </select>
+        </div>
 
-        <div class="section-title">Recommended PID Delta</div>
-        <div class="row"><span>P</span><span>${deltaToPercentText(pid.p)}</span></div>
-        <div class="row"><span>D</span><span>${deltaToPercentText(pid.d)}</span></div>
-        <div class="row"><span>FF</span><span>${deltaToPercentText(pid.ff)}</span></div>
-
-        <div class="section-title">Recommendation</div>
-        <ul class="bullet-list">
-          <li>${escapeHtml(a.recommendation_text || "No recommendation text available.")}</li>
-          ${actions.map(item => `<li>${escapeHtml(item)}</li>`).join("")}
-          ${warnings.map(item => `<li>${escapeHtml("Warning: " + item)}</li>`).join("")}
-        </ul>
+        <div style="display:flex; align-items:end;">
+          <button onclick="analyzeLog()">Analyze Log</button>
+        </div>
       </div>
-    `;
 
-    container.innerHTML += html;
-  }
-}
+      <div id="modeWarning" class="warning-banner hidden"></div>
+      <div id="status" class="status">Waiting for upload.</div>
+    </div>
 
-function generateCLI(analysis) {
-  const lines = [
-    "# AeroTune CLI delta preview",
-    "# These are percentage deltas, not final PID values.",
-    "# Apply them to your CURRENT tune manually."
-  ];
+    <div class="card">
+      <h2>Optional: Current PID Values</h2>
+      <p class="tiny">
+        Enter your current values if you want AeroTune to calculate actual suggested numbers from the returned percentage deltas.
+      </p>
 
-  const axes = analysis.axes || {};
-  const order = [
-    ["roll", "ROLL"],
-    ["pitch", "PITCH"],
-    ["yaw", "YAW"]
-  ];
+      <div class="grid grid-3">
+        <div class="metric-box">
+          <div class="metric-label">Roll</div>
+          <label for="rollP">P</label>
+          <input id="rollP" type="number" step="0.1" placeholder="ex: 60" />
+          <label for="rollD" style="margin-top:10px;">D</label>
+          <input id="rollD" type="number" step="0.1" placeholder="ex: 30" />
+          <label for="rollFF" style="margin-top:10px;">FF</label>
+          <input id="rollFF" type="number" step="0.1" placeholder="ex: 80" />
+        </div>
 
-  for (const [key, label] of order) {
-    const axis = axes[key];
-    if (!axis) continue;
+        <div class="metric-box">
+          <div class="metric-label">Pitch</div>
+          <label for="pitchP">P</label>
+          <input id="pitchP" type="number" step="0.1" placeholder="ex: 65" />
+          <label for="pitchD" style="margin-top:10px;">D</label>
+          <input id="pitchD" type="number" step="0.1" placeholder="ex: 32" />
+          <label for="pitchFF" style="margin-top:10px;">FF</label>
+          <input id="pitchFF" type="number" step="0.1" placeholder="ex: 85" />
+        </div>
 
-    lines.push("");
-    lines.push(`# ${label}`);
-    lines.push(`# issue: ${axis.issue || "unknown"}`);
-    lines.push(`# confidence: ${axis.confidence ?? "N/A"}`);
-    lines.push(`# valid_for_pid: ${axis.valid_for_pid ? "yes" : "no"}`);
+        <div class="metric-box">
+          <div class="metric-label">Yaw</div>
+          <label for="yawP">P</label>
+          <input id="yawP" type="number" step="0.1" placeholder="ex: 50" />
+          <label for="yawD">D</label>
+          <input id="yawD" type="number" step="0.1" placeholder="ex: 0" />
+          <label for="yawFF" style="margin-top:10px;">FF</label>
+          <input id="yawFF" type="number" step="0.1" placeholder="ex: 70" />
+        </div>
+      </div>
+    </div>
 
-    const pid = axis.pid_delta_pct || {};
-    lines.push(`# P delta: ${deltaToPercentText(pid.p)}`);
-    lines.push(`# D delta: ${deltaToPercentText(pid.d)}`);
-    lines.push(`# FF delta: ${deltaToPercentText(pid.ff)}`);
+    <div class="card">
+      <h2>Summary</h2>
+      <div id="summaryBox">No analysis yet.</div>
+    </div>
 
-    if (axis.recommendation_text) {
-      lines.push(`# note: ${axis.recommendation_text}`);
+    <div class="card">
+      <h2>Axis Review</h2>
+      <div id="axisContainer" class="axis-grid"></div>
+    </div>
+
+    <div class="card">
+      <h2>Manual Notes / Real Value Math</h2>
+      <textarea id="cliBox" readonly></textarea>
+    </div>
+
+    <div class="card">
+      <h2>Roll Gyro vs Setpoint</h2>
+      <canvas id="gyroChart"></canvas>
+    </div>
+
+    <div class="card">
+      <h2>Roll Frequency Spectrum</h2>
+      <canvas id="freqChart"></canvas>
+    </div>
+  </div>
+
+  <script>
+    let gyroChart = null;
+    let freqChart = null;
+    let lastSelectedMode = "efficiency";
+
+    function setStatus(message, type = "") {
+      const el = document.getElementById("status");
+      el.textContent = message;
+      el.className = "status " + type;
     }
-  }
 
-  lines.push("");
-  lines.push("# Example manual math:");
-  lines.push("# new_P = current_P * (1 + delta)");
-  lines.push("# new_D = current_D * (1 + delta)");
-  lines.push("# new_FF = current_FF * (1 + delta)");
-
-  return lines.join("\n");
-}
-
-function renderCLI(analysis) {
-  const cliBox = document.getElementById("cliBox");
-  if (!cliBox) return;
-  cliBox.value = generateCLI(analysis);
-}
-
-async function renderPlots() {
-  try {
-    const res = await fetch("/plot");
-    const payload = await res.json();
-    if (!res.ok) {
-      throw new Error(payload.error || "Could not load plots.");
+    function pctText(value) {
+      const n = Number(value || 0) * 100;
+      return `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
     }
 
-    renderGyroChart(payload);
-    renderFreqChart(payload);
+    function safe(value, fallback = "N/A") {
+      if (value === null || value === undefined || value === "") return fallback;
+      return value;
+    }
 
-    document.getElementById("gyroCard")?.classList.remove("hidden");
-    document.getElementById("fftCard")?.classList.remove("hidden");
-  } catch (err) {
-    console.warn(err);
-  }
-}
+    function fixed(value, digits = 2, suffix = "") {
+      if (value === null || value === undefined || !Number.isFinite(Number(value))) return "N/A";
+      return Number(value).toFixed(digits) + suffix;
+    }
 
-function renderGyroChart(payload) {
-  const ctx = document.getElementById("gyroChart");
-  if (!ctx || typeof Chart === "undefined") return;
+    function prettyMode(mode) {
+      const map = {
+        efficiency: "Efficiency",
+        efficiency_snappy: "Efficiency + Snappy",
+        efficiency_floaty: "Efficiency + Floaty",
+        snappy: "Snappy",
+        floaty: "Floaty"
+      };
+      return map[mode] || mode;
+    }
 
-  if (gyroChart) {
-    gyroChart.destroy();
-  }
+    function backendGoalFromMode(mode) {
+      if (mode === "efficiency_snappy") return "snappy";
+      if (mode === "efficiency_floaty") return "floaty";
+      return mode;
+    }
 
-  gyroChart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: payload.time || [],
-      datasets: [
-        {
-          label: "Gyro",
-          data: payload.gyro || [],
-          borderWidth: 1,
-          pointRadius: 0
-        },
-        {
-          label: "Setpoint",
-          data: payload.setpoint || [],
-          borderWidth: 1,
-          pointRadius: 0
-        },
-        {
-          label: "Smoothed",
-          data: payload.simulated || [],
-          borderWidth: 1,
-          pointRadius: 0
+    function updateModeWarning() {
+      const mode = document.getElementById("tuningMode").value;
+      lastSelectedMode = mode;
+      const box = document.getElementById("modeWarning");
+
+      if (mode === "efficiency_floaty") {
+        box.textContent = "Warning: choosing Efficiency + Floaty may decrease efficiency in exchange for a softer, floatier feel.";
+        box.classList.remove("hidden");
+      } else if (mode === "efficiency_snappy") {
+        box.textContent = "Warning: choosing Efficiency + Snappy may slightly decrease efficiency in exchange for a sharper, more locked-in feel.";
+        box.classList.remove("hidden");
+      } else if (mode === "floaty") {
+        box.textContent = "Warning: choosing Floaty can reduce efficiency and response sharpness in exchange for a softer feel.";
+        box.classList.remove("hidden");
+      } else if (mode === "snappy") {
+        box.textContent = "Warning: choosing Snappy can reduce efficiency and raise heat/noise risk if pushed too far.";
+        box.classList.remove("hidden");
+      } else {
+        box.classList.add("hidden");
+        box.textContent = "";
+      }
+    }
+
+    function getCurrentPidInputs(axis) {
+      return {
+        p: parseFloat(document.getElementById(`${axis}P`)?.value),
+        d: parseFloat(document.getElementById(`${axis}D`)?.value),
+        ff: parseFloat(document.getElementById(`${axis}FF`)?.value)
+      };
+    }
+
+    function adjustedValue(current, delta) {
+      if (!Number.isFinite(current)) return null;
+      return current * (1 + Number(delta || 0));
+    }
+
+    function adjustedText(current, delta) {
+      const val = adjustedValue(current, delta);
+      if (val === null) return "Enter current value";
+      return val.toFixed(2);
+    }
+
+    async function analyzeLog() {
+      const fileInput = document.getElementById("logFile");
+      const droneSize = document.getElementById("droneSize").value;
+      const tuningMode = document.getElementById("tuningMode").value;
+      const backendGoal = backendGoalFromMode(tuningMode);
+
+      if (!fileInput.files.length) {
+        setStatus("Choose a CSV file first.", "bad");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", fileInput.files[0]);
+      formData.append("drone_size", droneSize);
+      formData.append("tuning_goal", backendGoal);
+
+      setStatus("Analyzing log...", "warn");
+      updateModeWarning();
+
+      try {
+        const res = await fetch("/upload-log", {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || "Upload failed.");
         }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false
-    }
-  });
-}
 
-function renderFreqChart(payload) {
-  const ctx = document.getElementById("freqChart");
-  if (!ctx || typeof Chart === "undefined") return;
+        renderSummary(data.analysis, tuningMode);
+        renderAxes(data.analysis.axes || {}, tuningMode);
+        renderManualNotes(data.analysis, tuningMode);
+        await renderPlots();
 
-  if (freqChart) {
-    freqChart.destroy();
-  }
-
-  freqChart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: payload.freqs || [],
-      datasets: [
-        {
-          label: "Spectrum",
-          data: payload.magnitude || [],
-          borderWidth: 1,
-          pointRadius: 0
+        if (data.analysis.valid_for_pid) {
+          setStatus("Analysis complete. Conservative real PID percentage changes are available.", "good");
+        } else {
+          setStatus("Analysis complete. Diagnosis is available, but PID advice is limited.", "warn");
         }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false
+      } catch (err) {
+        setStatus(err.message || "Something went wrong.", "bad");
+      }
     }
-  });
-}
 
-function copyCLI() {
-  const cliBox = document.getElementById("cliBox");
-  if (!cliBox) return;
-  navigator.clipboard.writeText(cliBox.value || "");
-  setStatus("CLI preview copied.", "success");
-}
-</script>
-</script>
+    function renderSummary(analysis, tuningMode) {
+      const box = document.getElementById("summaryBox");
+      const warnings = (analysis.warnings || []).map(w => `<li>${w}</li>`).join("");
+      const actions = (analysis.global_actions || []).map(a => `<li>${a}</li>`).join("");
+
+      const extraWarning = (
+        tuningMode === "efficiency_snappy" || tuningMode === "efficiency_floaty" ||
+        tuningMode === "snappy" || tuningMode === "floaty"
+      )
+        ? `<div class="warning-banner" style="margin-top:14px;">
+            ${document.getElementById("modeWarning").textContent}
+          </div>`
+        : "";
+
+      box.innerHTML = `
+        <div class="metric-grid">
+          <div class="metric-box">
+            <div class="metric-label">Status</div>
+            <div class="metric-value">${safe(analysis.status)}</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">Goal</div>
+            <div class="metric-value">${prettyMode(tuningMode)}</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">Drone Size</div>
+            <div class="metric-value">${safe(analysis.drone_size)} inch</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">Sample Rate</div>
+            <div class="metric-value">${fixed(analysis.sample_rate_hz, 2, " Hz")}</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">Duration</div>
+            <div class="metric-value">${fixed(analysis.duration_s, 3, " s")}</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">PID Advice</div>
+            <div class="metric-value ${analysis.valid_for_pid ? "good" : "warn"}">
+              ${analysis.valid_for_pid ? "Allowed" : "Diagnosis Only"}
+            </div>
+          </div>
+        </div>
+
+        <div class="soft-note" style="margin-top:14px;">
+          <strong>Summary:</strong> ${safe(analysis.summary)}
+        </div>
+
+        ${extraWarning}
+
+        <div class="grid grid-2" style="margin-top:14px;">
+          <div>
+            <h4>Warnings</h4>
+            <ul>${warnings || "<li>No global warnings.</li>"}</ul>
+          </div>
+          <div>
+            <h4>Actions</h4>
+            <ul>${actions || "<li>No global actions.</li>"}</ul>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderAxes(axes, tuningMode) {
+      const container = document.getElementById("axisContainer");
+      container.innerHTML = "";
+
+      for (const key of ["roll", "pitch", "yaw"]) {
+        const axis = axes[key];
+        if (!axis) continue;
+
+        const signal = axis.signal || {};
+        const tracking = axis.tracking || {};
+        const pid = axis.pid_delta_pct || {};
+        const actions = axis.actions || [];
+        const current = getCurrentPidInputs(key);
+
+        const card = document.createElement("div");
+        card.className = "axis-card";
+
+        card.innerHTML = `
+          <h3>${axis.axis_name}</h3>
+
+          <div class="pill-row">
+            <div class="pill">${safe(axis.issue)}</div>
+            <div class="pill">${safe(axis.feel)}</div>
+            <div class="pill ${axis.valid_for_pid ? "good" : "warn"}">
+              ${axis.valid_for_pid ? "PID deltas allowed" : "Diagnosis only"}
+            </div>
+          </div>
+
+          <div class="row"><span>Confidence</span><span>${fixed(axis.confidence, 3)}</span></div>
+          <div class="row"><span>Dominant Frequency</span><span>${fixed(signal.dominant_freq_hz, 2, " Hz")}</span></div>
+          <div class="row"><span>Lag</span><span>${fixed(tracking.lag_ms, 2, " ms")}</span></div>
+          <div class="row"><span>Tracking Corr</span><span>${fixed(tracking.corr, 4)}</span></div>
+          <div class="row"><span>RMS</span><span>${fixed(signal.rms, 4)}</span></div>
+          <div class="row"><span>Peak-to-Peak</span><span>${fixed(signal.peak_to_peak, 4)}</span></div>
+
+          <div class="section-title">Suggested PID Delta</div>
+          <div class="row"><span>P</span><span>${pctText(pid.p)}</span></div>
+          <div class="row"><span>D</span><span>${pctText(pid.d)}</span></div>
+          <div class="row"><span>FF</span><span>${pctText(pid.ff)}</span></div>
+
+          <div class="section-title">Suggested Actual Values</div>
+          <div class="row"><span>P</span><span>${adjustedText(current.p, pid.p)}</span></div>
+          <div class="row"><span>D</span><span>${adjustedText(current.d, pid.d)}</span></div>
+          <div class="row"><span>FF</span><span>${adjustedText(current.ff, pid.ff)}</span></div>
+
+          <div class="section-title">Simple Recommendation</div>
+          <div class="soft-note">${safe(axis.recommendation_text)}</div>
+
+          <div class="section-title">What To Do</div>
+          <ul>${actions.map(a => `<li>${a}</li>`).join("") || "<li>No action listed.</li>"}</ul>
+        `;
+
+        if (
+          (tuningMode === "efficiency_floaty" || tuningMode === "floaty") &&
+          axis.valid_for_pid
+        ) {
+          const banner = document.createElement("div");
+          banner.className = "warning-banner";
+          banner.textContent = "This direction may reduce efficiency, but it should move the tune toward a floatier feel.";
+          card.appendChild(banner);
+        }
+
+        if (
+          (tuningMode === "efficiency_snappy" || tuningMode === "snappy") &&
+          axis.valid_for_pid
+        ) {
+          const banner = document.createElement("div");
+          banner.className = "warning-banner";
+          banner.textContent = "This direction may reduce efficiency, but it should improve sharpness and locked-in feel.";
+          card.appendChild(banner);
+        }
+
+        container.appendChild(card);
+      }
+    }
+
+    function renderManualNotes(analysis, tuningMode) {
+      const lines = [];
+      lines.push("# AeroTune manual tune notes");
+      lines.push(`# selected_mode: ${prettyMode(tuningMode)}`);
+      lines.push(`# backend_goal_used: ${analysis.tuning_goal}`);
+      lines.push(`# summary: ${analysis.summary}`);
+      lines.push("");
+
+      for (const key of ["roll", "pitch", "yaw"]) {
+        const axis = analysis.axes[key];
+        if (!axis) continue;
+
+        const pid = axis.pid_delta_pct || {};
+        const current = getCurrentPidInputs(key);
+
+        lines.push(`[${axis.axis_name}]`);
+        lines.push(`issue = ${axis.issue}`);
+        lines.push(`feel = ${axis.feel}`);
+        lines.push(`confidence = ${axis.confidence}`);
+        lines.push(`valid_for_pid = ${axis.valid_for_pid}`);
+        lines.push(`P delta = ${pctText(pid.p)}`);
+        lines.push(`D delta = ${pctText(pid.d)}`);
+        lines.push(`FF delta = ${pctText(pid.ff)}`);
+
+        if (Number.isFinite(current.p)) {
+          lines.push(`P new = ${adjustedValue(current.p, pid.p).toFixed(2)} (from ${current.p})`);
+        }
+        if (Number.isFinite(current.d)) {
+          lines.push(`D new = ${adjustedValue(current.d, pid.d).toFixed(2)} (from ${current.d})`);
+        }
+        if (Number.isFinite(current.ff)) {
+          lines.push(`FF new = ${adjustedValue(current.ff, pid.ff).toFixed(2)} (from ${current.ff})`);
+        }
+
+        lines.push(`note = ${axis.recommendation_text}`);
+        lines.push("");
+      }
+
+      lines.push("Math:");
+      lines.push("new_value = current_value * (1 + delta)");
+      lines.push("");
+      lines.push("Reminder:");
+      lines.push("A positive delta increases that term.");
+      lines.push("A negative delta decreases that term.");
+      lines.push("Use one small change step at a time.");
+
+      document.getElementById("cliBox").value = lines.join("\n");
+    }
+
+    async function renderPlots() {
+      try {
+        const res = await fetch("/plot");
+        const data = await res.json();
+        if (!res.ok) return;
+
+        if (gyroChart) gyroChart.destroy();
+        if (freqChart) freqChart.destroy();
+
+        gyroChart = new Chart(document.getElementById("gyroChart"), {
+          type: "line",
+          data: {
+            labels: data.time,
+            datasets: [
+              {
+                label: "Gyro",
+                data: data.gyro,
+                borderWidth: 2,
+                pointRadius: 0
+              },
+              {
+                label: "Setpoint",
+                data: data.setpoint,
+                borderWidth: 2,
+                pointRadius: 0
+              },
+              {
+                label: "Smoothed",
+                data: data.simulated,
+                borderWidth: 2,
+                pointRadius: 0
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            interaction: { mode: "index", intersect: false }
+          }
+        });
+
+        freqChart = new Chart(document.getElementById("freqChart"), {
+          type: "line",
+          data: {
+            labels: data.freqs,
+            datasets: [
+              {
+                label: "Spectrum",
+                data: data.magnitude,
+                borderWidth: 2,
+                pointRadius: 0
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            interaction: { mode: "index", intersect: false }
+          }
+        });
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+
+    document.getElementById("tuningMode").addEventListener("change", updateModeWarning);
+    updateModeWarning();
+  </script>
 </body>
 </html>
