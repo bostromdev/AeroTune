@@ -19,7 +19,13 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 LAST_FILE_PATH: Optional[Path] = None
 
 ALLOWED_DRONE_SIZES = {"5", "7"}
-ALLOWED_TUNING_GOALS = {"efficiency", "snappy", "floaty"}
+ALLOWED_TUNING_GOALS = {
+    "efficiency",
+    "efficiency_snappy",
+    "efficiency_floaty",
+    "snappy",
+    "floaty",
+}
 MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -147,7 +153,10 @@ async def upload_log(
             return error_response("Invalid drone size. Use 5 or 7.", 400)
 
         if tuning_goal not in ALLOWED_TUNING_GOALS:
-            return error_response("Invalid tuning goal. Use efficiency, snappy, or floaty.", 400)
+            return error_response(
+                "Invalid tuning goal. Use efficiency, efficiency_snappy, efficiency_floaty, snappy, or floaty.",
+                400,
+            )
 
         saved_path = save_upload(file)
         LAST_FILE_PATH = saved_path
@@ -159,7 +168,11 @@ async def upload_log(
                 400,
             )
 
-        analysis = detect_oscillation(df, drone_size=drone_size, tuning_goal=tuning_goal)
+        analysis = detect_oscillation(
+            df,
+            drone_size=drone_size,
+            tuning_goal=tuning_goal,
+        )
 
         return {
             "filename": saved_path.name,

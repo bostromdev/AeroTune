@@ -13,12 +13,26 @@ AXIS_MAP = {
     "yaw": ("gyro_z", "setpoint_yaw"),
 }
 
-GOALS = {"efficiency", "snappy", "floaty"}
+GOALS = {
+    "efficiency",
+    "efficiency_snappy",
+    "efficiency_floaty",
+    "snappy",
+    "floaty",
+}
 
 DRONE_BANDS = {
     "5": {"low": (0, 35), "mid": (35, 90), "high": (90, 180)},
     "7": {"low": (0, 25), "mid": (25, 70), "high": (70, 140)},
 }
+
+SOURCE_REFERENCES = [
+    "Betaflight PID Tuning Guide",
+    "Betaflight PID tuning",
+    "Betaflight Feed Forward 2.0",
+    "Betaflight Dynamic D",
+    "Betaflight Freestyle Tuning Principles",
+]
 
 
 @dataclass
@@ -32,6 +46,9 @@ class AxisStats:
     lag_ms: Optional[float]
     rms: float
     peak_to_peak: float
+    tracking_error_rms: float
+    setpoint_rms: float
+    error_ratio: float
 
 
 def _band_energy(freqs: np.ndarray, mags: np.ndarray, low: float, high: float) -> float:
@@ -95,6 +112,11 @@ def _compute_axis_stats(
 
     lag_ms = _estimate_lag_ms(setpoint, gyro, sample_rate_hz)
 
+    tracking_error = setpoint - gyro
+    tracking_error_rms = float(np.sqrt(np.mean(np.square(tracking_error))))
+    setpoint_rms = float(np.sqrt(np.mean(np.square(setpoint)))) if len(setpoint) else 0.0
+    error_ratio = tracking_error_rms / max(setpoint_rms, 1e-6)
+
     return AxisStats(
         dominant_freq_hz=dominant_freq_hz,
         low_energy=low_energy,
@@ -105,6 +127,9 @@ def _compute_axis_stats(
         lag_ms=lag_ms,
         rms=float(np.sqrt(np.mean(np.square(centered)))),
         peak_to_peak=float(np.max(gyro) - np.min(gyro)),
+        tracking_error_rms=tracking_error_rms,
+        setpoint_rms=setpoint_rms,
+        error_ratio=float(error_ratio),
     )
 
 
@@ -123,49 +148,71 @@ def _classify_issue(stats: AxisStats) -> Tuple[str, float]:
     if stats.lag_ms is not None:
         confidence += 0.10
 
+    # Noise / oscillation first
     if high_ratio > 0.50:
         return "high_frequency_noise", min(confidence + 0.20, 1.0)
+
     if mid_ratio > 0.45:
         return "mid_frequency_vibration", min(confidence + 0.20, 1.0)
+
     if low_ratio > 0.45:
         return "low_frequency_oscillation", min(confidence + 0.20, 1.0)
+
+    # Bounceback / propwash-like behavior
+    if (
+        stats.rms > 0
+        and stats.peak_to_peak > 4.0 * stats.rms
+        and stats.corr is not None
+        and stats.corr > 0.45
+    ):
+        return "propwash_or_bounceback", min(confidence + 0.15, 1.0)
+
+    # Drift / weak hold maps closer to I guidance
+    if (
+        stats.error_ratio > 0.55
+        and (stats.lag_ms is None or abs(stats.lag_ms) < 20.0)
+        and (stats.corr is not None and stats.corr > 0.40)
+    ):
+        return "drift_or_weak_hold", min(confidence + 0.15, 1.0)
+
+    # Soft / delayed tracking maps to P and FF guidance
     if stats.corr is not None and stats.corr < 0.35:
         return "poor_tracking", min(confidence + 0.15, 1.0)
+
     if stats.lag_ms is not None and stats.lag_ms > 35:
         return "slow_response", min(confidence + 0.15, 1.0)
-
-    if stats.rms > 0 and stats.peak_to_peak > 4.0 * stats.rms and stats.corr is not None and stats.corr > 0.45:
-        return "propwash_or_rebound", min(confidence + 0.15, 1.0)
 
     return "mostly_clean", min(confidence, 1.0)
 
 
 def _base_delta_for_issue(axis: str, issue: str) -> Dict[str, float]:
-    delta = {"p": 0.0, "d": 0.0, "ff": 0.0}
+    delta = {"p": 0.0, "i": 0.0, "d": 0.0, "ff": 0.0}
 
     if issue == "high_frequency_noise":
-        delta["p"] = -0.01
-        delta["d"] = -0.02 if axis != "yaw" else 0.0
+        delta["p"] = -0.02
+        delta["d"] = -0.03 if axis != "yaw" else 0.0
 
     elif issue == "mid_frequency_vibration":
-        delta["p"] = -0.015
+        delta["p"] = -0.02
         delta["d"] = -0.02 if axis != "yaw" else 0.0
 
     elif issue == "low_frequency_oscillation":
-        delta["p"] = -0.025
+        delta["p"] = -0.03
         delta["d"] = -0.01 if axis != "yaw" else 0.0
 
+    elif issue == "drift_or_weak_hold":
+        delta["i"] = 0.04
+
     elif issue == "poor_tracking":
-        delta["p"] = 0.01
-        delta["ff"] = 0.015
+        delta["p"] = 0.02
+        delta["ff"] = 0.03
 
     elif issue == "slow_response":
-        delta["p"] = 0.005
-        delta["ff"] = 0.02
+        delta["p"] = 0.01
+        delta["ff"] = 0.04
 
-    elif issue == "propwash_or_rebound":
-        delta["p"] = -0.005
-        delta["d"] = 0.02 if axis != "yaw" else 0.0
+    elif issue == "propwash_or_bounceback":
+        delta["d"] = 0.03 if axis != "yaw" else 0.0
 
     return delta
 
@@ -175,28 +222,48 @@ def _apply_goal_bias(delta: Dict[str, float], axis: str, issue: str, goal: str) 
 
     if goal == "efficiency":
         result["p"] *= 0.8
+        result["i"] *= 0.9
         result["d"] *= 0.7
         result["ff"] *= 0.8
 
+    elif goal == "efficiency_snappy":
+        result["p"] *= 0.9
+        result["i"] *= 0.95
+        result["d"] *= 0.85
+        result["ff"] *= 0.9
+
+        if issue in {"poor_tracking", "slow_response", "mostly_clean"}:
+            result["p"] += 0.005 if axis != "yaw" else 0.003
+            result["ff"] += 0.01
+
+    elif goal == "efficiency_floaty":
+        result["p"] *= 0.9
+        result["i"] *= 0.95
+        result["d"] *= 0.85
+        result["ff"] *= 0.9
+
+        if issue in {"mostly_clean", "poor_tracking", "slow_response"}:
+            result["p"] -= 0.01 if axis != "yaw" else 0.005
+            result["ff"] -= 0.015
+
     elif goal == "snappy":
-        # sharper feel / faster response
         if issue in {"poor_tracking", "slow_response", "mostly_clean"}:
             result["p"] += 0.01 if axis != "yaw" else 0.005
-            result["ff"] += 0.015
-        if issue == "propwash_or_rebound" and axis != "yaw":
+            result["ff"] += 0.02
+        if issue == "propwash_or_bounceback" and axis != "yaw":
             result["d"] += 0.005
         if issue == "high_frequency_noise":
             result["d"] = min(result["d"], 0.0)
 
     elif goal == "floaty":
-        # softer / less locked-in
         if issue in {"mostly_clean", "poor_tracking", "slow_response"}:
-            result["p"] -= 0.01 if axis != "yaw" else 0.005
-            result["ff"] -= 0.015
-        if issue == "propwash_or_rebound" and axis != "yaw":
+            result["p"] -= 0.02 if axis != "yaw" else 0.01
+            result["ff"] -= 0.02
+        if issue == "propwash_or_bounceback" and axis != "yaw":
             result["d"] -= 0.005
 
     result["p"] = float(np.clip(result["p"], -0.06, 0.06))
+    result["i"] = float(np.clip(result["i"], -0.06, 0.06))
     result["d"] = float(np.clip(result["d"], -0.06, 0.06 if axis != "yaw" else 0.0))
     result["ff"] = float(np.clip(result["ff"], -0.06, 0.06))
 
@@ -211,17 +278,19 @@ def _feel_text(issue: str, goal: str) -> str:
         return "Delayed / soft"
     if issue == "poor_tracking":
         return "Soft / not following stick well"
+    if issue == "drift_or_weak_hold":
+        return "Weak hold / drifting"
     if issue == "low_frequency_oscillation":
         return "Loose / bouncing"
     if issue == "mid_frequency_vibration":
         return "Shaky / rough"
     if issue == "high_frequency_noise":
         return "Harsh / noisy"
-    if issue == "propwash_or_rebound":
-        return "Washy / reboundy"
-    if goal == "snappy":
+    if issue == "propwash_or_bounceback":
+        return "Washy / bounceback"
+    if goal in {"snappy", "efficiency_snappy"}:
         return "Mostly clean, but can be sharper"
-    if goal == "floaty":
+    if goal in {"floaty", "efficiency_floaty"}:
         return "Mostly clean, but can be softer"
     return "Mostly clean / efficient"
 
@@ -231,45 +300,69 @@ def _actions_for_issue(issue: str, goal: str) -> List[str]:
 
     if issue == "high_frequency_noise":
         base.extend([
-            "Noise looks high. Fix props, motors, filtering, or frame problems before pushing PID harder.",
-            "Keep D conservative here."
+            "Noise looks high. Lower P and D a little.",
+            "Fix props, motors, filtering, or frame problems before pushing tune harder.",
+            "Keep D conservative here.",
         ])
     elif issue == "mid_frequency_vibration":
         base.extend([
             "Back off P and D a little.",
-            "Check prop balance and frame vibration."
+            "Check prop balance and frame vibration.",
         ])
     elif issue == "low_frequency_oscillation":
         base.extend([
             "Reduce P a little first.",
-            "If it still bounces, reduce D a little too."
+            "If it still bounces, reduce D a little too.",
+        ])
+    elif issue == "drift_or_weak_hold":
+        base.extend([
+            "Angle hold looks weak.",
+            "Increase I a little to improve hold on throttle changes and general drift control.",
         ])
     elif issue == "poor_tracking":
         base.extend([
             "Response looks soft.",
-            "A small P and FF increase can help."
+            "A small P increase and a small FF increase can help.",
         ])
     elif issue == "slow_response":
         base.extend([
             "Response looks delayed.",
-            "A small FF increase is the safest first move."
+            "A small FF increase is the safest first move.",
         ])
-    elif issue == "propwash_or_rebound":
+    elif issue == "propwash_or_bounceback":
         base.extend([
-            "This looks like propwash or rebound.",
-            "A tiny D increase may help, but watch motor heat."
+            "This looks like bounceback or propwash.",
+            "Increase D only as much as needed.",
+            "If the build is clean, consider D Max 20–30% above base D instead of making base D too high.",
+            "After D changes, do a short flight and check motor temperature.",
         ])
     else:
         base.append("Log looks mostly clean. Only tiny changes make sense.")
 
     if goal == "efficiency":
         base.append("Goal is efficiency, so changes stay smaller and safer.")
+    elif goal == "efficiency_snappy":
+        base.append("Goal is efficiency first, with a small snappier bias.")
+    elif goal == "efficiency_floaty":
+        base.append("Goal is efficiency first, with a small floatier bias.")
     elif goal == "snappy":
-        base.append("Goal is snappy feel, so response and lock-in get more priority.")
+        base.append("Goal is sharp stick response, so P and FF get more priority.")
     elif goal == "floaty":
-        base.append("Goal is floatier feel, so the tune is softened slightly.")
+        base.append("Goal is a looser, smoother feel, so P and FF are softened slightly.")
 
     return base
+
+
+def _warnings_for_goal(goal: str) -> List[str]:
+    if goal == "efficiency_snappy":
+        return ["This may reduce efficiency slightly while improving sharpness and stick response."]
+    if goal == "efficiency_floaty":
+        return ["This may reduce efficiency slightly while improving a looser, floatier feel."]
+    if goal == "snappy":
+        return ["This can reduce efficiency and increase twitchiness or overshoot if pushed too far."]
+    if goal == "floaty":
+        return ["This can reduce sharpness and response speed in exchange for a softer feel."]
+    return []
 
 
 def _recommendation_text(axis: str, issue: str, goal: str, delta: Dict[str, float], valid_for_pid: bool) -> str:
@@ -277,7 +370,7 @@ def _recommendation_text(axis: str, issue: str, goal: str, delta: Dict[str, floa
         return f"{axis.upper()}: diagnosis only. Data confidence is too low for safe PID moves."
 
     parts = []
-    for key in ("p", "d", "ff"):
+    for key in ("p", "i", "d", "ff"):
         val = delta[key] * 100.0
         if abs(val) >= 0.05:
             parts.append(f"{key.upper()} {'+' if val > 0 else ''}{val:.1f}%")
@@ -285,7 +378,7 @@ def _recommendation_text(axis: str, issue: str, goal: str, delta: Dict[str, floa
     if not parts:
         return f"{axis.upper()}: {issue.replace('_', ' ')} detected, but no change is recommended."
 
-    return f"{axis.upper()}: {issue.replace('_', ' ')} for {goal} -> " + ", ".join(parts)
+    return f"{axis.upper()}: {issue.replace('_', ' ')} for {goal.replace('_', ' ')} -> " + ", ".join(parts)
 
 
 def detect_oscillation(
@@ -303,6 +396,7 @@ def detect_oscillation(
             "axes": {},
             "recommendations": [],
             "tuning_goal": tuning_goal,
+            "source_references": SOURCE_REFERENCES,
         }
 
     if tuning_goal not in GOALS:
@@ -318,6 +412,7 @@ def detect_oscillation(
             "axes": {},
             "recommendations": [],
             "tuning_goal": tuning_goal,
+            "source_references": SOURCE_REFERENCES,
         }
 
     time = df["time"].to_numpy(dtype=float)
@@ -331,6 +426,7 @@ def detect_oscillation(
             "axes": {},
             "recommendations": [],
             "tuning_goal": tuning_goal,
+            "source_references": SOURCE_REFERENCES,
         }
 
     dt = np.diff(time)
@@ -344,6 +440,7 @@ def detect_oscillation(
             "axes": {},
             "recommendations": [],
             "tuning_goal": tuning_goal,
+            "source_references": SOURCE_REFERENCES,
         }
 
     sample_rate_hz = float(1.0 / np.median(dt))
@@ -354,6 +451,7 @@ def detect_oscillation(
     axes = {}
     recommendations = []
     global_actions: List[str] = []
+    global_warnings: List[str] = _warnings_for_goal(tuning_goal)
     valid_axis_count = 0
 
     for axis_name, (gyro_col, setpoint_col) in AXIS_MAP.items():
@@ -397,16 +495,19 @@ def detect_oscillation(
             "tracking": {
                 "corr": None if stats.corr is None else round(stats.corr, 4),
                 "lag_ms": None if stats.lag_ms is None else round(stats.lag_ms, 2),
+                "tracking_error_rms": round(stats.tracking_error_rms, 4),
+                "error_ratio": round(stats.error_ratio, 4),
                 "usable": stats.corr is not None,
             },
             "pid_delta_pct": {
                 "p": round(pid_delta["p"], 4),
+                "i": round(pid_delta["i"], 4),
                 "d": round(pid_delta["d"], 4),
                 "ff": round(pid_delta["ff"], 4),
             },
             "recommendation_text": recommendation_text,
             "actions": actions,
-            "warnings": [],
+            "warnings": _warnings_for_goal(tuning_goal),
         }
 
         recommendations.append({
@@ -432,21 +533,24 @@ def detect_oscillation(
             "duration_s": round(duration_s, 3),
             "drone_size": str(drone_size),
             "tuning_goal": tuning_goal,
+            "source_references": SOURCE_REFERENCES,
         }
 
     if valid_axis_count == 0:
         summary = "Diagnosis available, but confidence is too low for safe PID changes."
     else:
-        summary = f"Analysis complete for {tuning_goal}. Conservative PID deltas are available."
+        summary = f"Analysis complete for {tuning_goal.replace('_', ' ')}. Conservative PID deltas are available."
 
-    global_actions.append("Use small changes, test one step at a time, and verify motor temps after D increases.")
+    global_actions.append("Use small changes and test one step at a time.")
+    global_actions.append("If D goes up, do a short flight and check motor temperature before continuing.")
+    global_actions.append("For bounceback or propwash on a clean build, consider D Max 20–30% above base D instead of making base D too high.")
     global_actions.append("Final real PID numbers come from applying these deltas to your current tune.")
 
     return {
         "status": "ok",
         "valid_for_pid": valid_axis_count > 0,
         "summary": summary,
-        "warnings": [],
+        "warnings": global_warnings,
         "global_actions": global_actions,
         "axes": axes,
         "recommendations": recommendations,
@@ -454,4 +558,5 @@ def detect_oscillation(
         "duration_s": round(duration_s, 3),
         "drone_size": str(drone_size),
         "tuning_goal": tuning_goal,
+        "source_references": SOURCE_REFERENCES,
     }
