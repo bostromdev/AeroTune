@@ -300,331 +300,365 @@
 let gyroChart = null;
 let freqChart = null;
 
-function severityClass(severity) {
-    if (severity === "high") return "bad";
-    if (severity === "medium") return "warn";
-    return "good";
-}
-
-function scoreClass(score) {
-    if (score >= 80) return "good";
-    if (score >= 60) return "warn";
-    return "bad";
-}
-
 function formatMaybe(value, suffix = "") {
-    if (value === null || value === undefined || Number.isNaN(value)) return "N/A";
+  if (value === null || value === undefined || value === "") return "N/A";
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return "N/A";
     return `${value}${suffix}`;
+  }
+  return `${value}${suffix}`;
 }
 
-function formatPercentRatio(value) {
-    if (value === null || value === undefined || Number.isNaN(value)) return "N/A";
-    return `${(value * 100).toFixed(1)}%`;
+function formatFixed(value, digits = 2, suffix = "") {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return "N/A";
+  return `${Number(value).toFixed(digits)}${suffix}`;
 }
 
-function dominantBandFromRatios(band) {
-    if (!band) return null;
-    const values = [
-        { key: "low", value: Number(band.low || 0) },
-        { key: "mid", value: Number(band.mid || 0) },
-        { key: "high", value: Number(band.high || 0) }
-    ];
-    values.sort((a, b) => b.value - a.value);
-    return values[0].value > 0 ? values[0].key : null;
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-function setStatus(message, level = "info") {
-    const box = document.getElementById("statusBox");
-    box.textContent = message;
-    box.className = `status ${level === "error" ? "bad" : level === "ok" ? "good" : ""}`;
+function setStatus(message, type = "info") {
+  const status = document.getElementById("statusBox");
+  if (!status) return;
+  status.textContent = message;
+  status.className = `status ${type}`;
 }
 
-function showResults() {
-    ["summaryCard", "axisCard", "cliCard", "gyroCard", "fftCard"].forEach(id => {
-        document.getElementById(id).classList.remove("hidden");
-    });
+function deltaToPercentText(value) {
+  const n = Number(value || 0);
+  const pct = n * 100;
+  if (Math.abs(pct) < 0.05) return "0.0%";
+  return `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%`;
+}
+
+function issueLabel(issue) {
+  if (!issue) return "unknown";
+  return String(issue).replaceAll("_", " ");
+}
+
+function validPill(valid) {
+  return valid ? "good" : "warn";
+}
+
+function dominantBandFromSignal(signal) {
+  const low = Number(signal?.low_band_energy || 0);
+  const mid = Number(signal?.mid_band_energy || 0);
+  const high = Number(signal?.high_band_energy || 0);
+
+  if (low >= mid && low >= high) return "LOW";
+  if (mid >= low && mid >= high) return "MID";
+  if (high >= low && high >= mid) return "HIGH";
+  return "N/A";
 }
 
 async function uploadFile() {
-    const file = document.getElementById("fileInput").files[0];
-    const droneSize = document.getElementById("droneSize").value;
+  const fileInput = document.getElementById("fileInput");
+  const sizeInput = document.getElementById("droneSize");
 
-    if (!file) {
-        setStatus("Choose a CSV file first.", "error");
-        return;
+  if (!fileInput || !fileInput.files || !fileInput.files.length) {
+    setStatus("Choose a CSV log first.", "error");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+  formData.append("drone_size", sizeInput ? sizeInput.value : "7");
+
+  setStatus("Analyzing log...", "info");
+
+  try {
+    const res = await fetch("/upload-log", {
+      method: "POST",
+      body: formData
+    });
+
+    const payload = await res.json();
+    if (!res.ok) {
+      throw new Error(payload.error || "Upload failed.");
     }
 
-    setStatus("Analyzing log...", "info");
+    const analysis = payload.analysis || {};
+    renderSummary(payload, analysis);
+    renderAxes(analysis.axes || {});
+    renderCLI(analysis);
+    await renderPlots();
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("drone_size", droneSize);
+    document.getElementById("summaryCard")?.classList.remove("hidden");
+    document.getElementById("axisCard")?.classList.remove("hidden");
+    document.getElementById("cliCard")?.classList.remove("hidden");
 
-    try {
-        const res = await fetch("/upload-log", {
-            method: "POST",
-            body: formData
-        });
-
-        const data = await res.json();
-
-        if (!res.ok || data.error) {
-            throw new Error(data.error || "Analysis failed");
-        }
-
-        const analysis = data.analysis;
-        renderSummary(data, analysis);
-        renderAxes(analysis.analysis || {});
-        generateCLI(analysis.analysis || {});
-        await loadGraph();
-        showResults();
-        setStatus(`Analysis complete for ${data.filename}`, "ok");
-    } catch (err) {
-        setStatus(err.message, "error");
-    }
+    setStatus(
+      analysis.valid_for_pid
+        ? "Analysis complete. Conservative PID deltas available."
+        : "Analysis complete. Diagnosis available, but PID changes are gated.",
+      analysis.valid_for_pid ? "success" : "warn"
+    );
+  } catch (err) {
+    setStatus(err.message || "Analysis failed.", "error");
+  }
 }
 
 function renderSummary(payload, analysis) {
-    const summaryGrid = document.getElementById("summaryGrid");
-    const metaGrid = document.getElementById("metaGrid");
-    const notes = document.getElementById("summaryNotes");
+  const summaryGrid = document.getElementById("summaryGrid");
+  const metaGrid = document.getElementById("metaGrid");
+  const notes = document.getElementById("summaryNotes");
 
-    summaryGrid.innerHTML = `
-        <div class="metric-box">
-            <div class="metric-label">Overall Score</div>
-            <div class="metric-value ${scoreClass(Number(analysis.overall_score || 0))}">${formatMaybe(analysis.overall_score)}</div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">Rating</div>
-            <div class="metric-value ${scoreClass(Number(analysis.overall_score || 0))}">${formatMaybe(analysis.rating)}</div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">Sampling Rate</div>
-            <div class="metric-value">${formatMaybe(analysis.sampling_rate_hz, " Hz")}</div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">Rows Parsed</div>
-            <div class="metric-value">${formatMaybe(payload.rows)}</div>
-        </div>
-    `;
+  const warnings = Array.isArray(analysis.warnings) ? analysis.warnings : [];
+  const actions = Array.isArray(analysis.global_actions) ? analysis.global_actions : [];
 
-    metaGrid.innerHTML = `
-        <div class="metric-box">
-            <div class="metric-label">Tuning Goal</div>
-            <div class="metric-value" style="font-size:1rem;">Stable high-speed efficiency</div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">Columns Parsed</div>
-            <div class="metric-value" style="font-size:1rem;">${(payload.columns || []).join(", ") || "N/A"}</div>
-        </div>
-    `;
+  summaryGrid.innerHTML = `
+    <div class="metric-box">
+      <div class="metric-label">PID Guidance</div>
+      <div class="metric-value ${analysis.valid_for_pid ? "good" : "warn"}">
+        ${analysis.valid_for_pid ? "Conservative deltas available" : "Diagnosis only / limited"}
+      </div>
+    </div>
 
-    const summaryNotes = Array.isArray(analysis.summary_notes) && analysis.summary_notes.length
-        ? analysis.summary_notes
-        : ["Use the axis cards and graphs together before changing tune values."];
-    notes.innerHTML = summaryNotes.map(n => `<li>${n}</li>`).join("");
+    <div class="metric-box">
+      <div class="metric-label">Sampling Rate</div>
+      <div class="metric-value">${formatFixed(analysis.sample_rate_hz, 2, " Hz")}</div>
+    </div>
+
+    <div class="metric-box">
+      <div class="metric-label">Log Duration</div>
+      <div class="metric-value">${formatFixed(analysis.duration_s, 3, " s")}</div>
+    </div>
+
+    <div class="metric-box">
+      <div class="metric-label">Rows Parsed</div>
+      <div class="metric-value">${formatMaybe(payload.rows)}</div>
+    </div>
+  `;
+
+  metaGrid.innerHTML = `
+    <div class="metric-box">
+      <div class="metric-label">Drone Size</div>
+      <div class="metric-value">${escapeHtml(analysis.drone_size || "N/A")}</div>
+    </div>
+
+    <div class="metric-box">
+      <div class="metric-label">Summary</div>
+      <div class="metric-value" style="font-size:1rem;">${escapeHtml(analysis.summary || "No summary available.")}</div>
+    </div>
+
+    <div class="metric-box">
+      <div class="metric-label">Columns Parsed</div>
+      <div class="metric-value" style="font-size:1rem;">${escapeHtml((payload.columns || []).join(", ") || "N/A")}</div>
+    </div>
+  `;
+
+  const noteItems = []
+    .concat(warnings.map(w => `Warning: ${w}`))
+    .concat(actions.map(a => `Action: ${a}`));
+
+  notes.innerHTML = noteItems.length
+    ? noteItems.map(n => `<li>${escapeHtml(n)}</li>`).join("")
+    : `<li>Use the axis cards and plots together before making tune changes.</li>`;
 }
 
 function renderAxes(axes) {
-    const container = document.getElementById("axisContainer");
-    container.innerHTML = "";
+  const container = document.getElementById("axisContainer");
+  container.innerHTML = "";
 
-    for (const key in axes) {
-        const a = axes[key] || {};
-        const severity = severityClass(a.severity);
-        const tracking = a.tracking || {};
-        const band = a.band_energy_ratio || {};
-        const dominantBand = a.dominant_band || dominantBandFromRatios(band) || "n/a";
-        const displayedPeak = a.peak_frequency_hz;
-        const globalPeak = a.global_peak_hz !== undefined ? a.global_peak_hz : a.peak_frequency_hz;
-        const tuningObjective = a.tuning_objective || "Push for clean, controlled response without wasting motor energy in vibration.";
+  for (const axisName of ["roll", "pitch", "yaw"]) {
+    const a = axes[axisName];
+    if (!a) continue;
 
-        const notes = []
-            .concat(Array.isArray(a.explanation) ? a.explanation : [])
-            .concat(Array.isArray(tracking.tuning_notes) ? tracking.tuning_notes : []);
+    const signal = a.signal || {};
+    const tracking = a.tracking || {};
+    const pid = a.pid_delta_pct || {};
+    const warnings = Array.isArray(a.warnings) ? a.warnings : [];
+    const actions = Array.isArray(a.actions) ? a.actions : [];
 
-        const html = `
-            <div class="axis-card">
-                <div class="axis-header">
-                    <div>
-                        <div class="axis-title">${a.axis_name || key.toUpperCase()}</div>
-                        <div class="pill ${severity}">${a.issue || "No issue text available"}</div>
-                    </div>
-                    <div class="pill">Band: ${String(dominantBand).toUpperCase()}</div>
-                </div>
+    const html = `
+      <div class="axis-card">
+        <div class="axis-header">
+          <div>
+            <div class="axis-title">${escapeHtml(a.axis_name || axisName.toUpperCase())}</div>
+            <div class="pill ${validPill(a.valid_for_pid)}">${escapeHtml(issueLabel(a.issue))}</div>
+          </div>
+          <div class="pill">Band: ${escapeHtml(dominantBandFromSignal(signal))}</div>
+        </div>
 
-                <div class="row"><span>Displayed Peak</span><span>${formatMaybe(displayedPeak, " Hz")}</span></div>
-                <div class="row"><span>Global Peak</span><span>${formatMaybe(globalPeak, " Hz")}</span></div>
-                <div class="row"><span>Axis Score</span><span class="${scoreClass(Number(a.axis_score || 0))}">${formatMaybe(a.axis_score)}</span></div>
-                <div class="row"><span>Expected Score</span><span class="${scoreClass(Number(a.expected_score || 0))}">${formatMaybe(a.expected_score)}</span></div>
-                <div class="row"><span>Estimated RPM</span><span>${formatMaybe(a.rpm_estimate)}</span></div>
-                <div class="row"><span>Propwash</span><span>${a.propwash_detected ? "YES" : "NO"}</span></div>
+        <div class="row"><span>Status</span><span>${a.valid_for_pid ? "PID deltas allowed" : "Diagnosis only"}</span></div>
+        <div class="row"><span>Confidence</span><span>${formatFixed(a.confidence, 3)}</span></div>
+        <div class="row"><span>Dominant Frequency</span><span>${formatFixed(signal.dominant_freq_hz, 2, " Hz")}</span></div>
+        <div class="row"><span>Spectral Centroid</span><span>${formatFixed(signal.spectral_centroid_hz, 2, " Hz")}</span></div>
+        <div class="row"><span>RMS</span><span>${formatFixed(signal.rms, 4)}</span></div>
+        <div class="row"><span>Peak-to-Peak</span><span>${formatFixed(signal.peak_to_peak, 4)}</span></div>
 
-                <div class="section-title">Energy Split</div>
-                <div class="row"><span>Low</span><span>${formatPercentRatio(band.low)}</span></div>
-                <div class="row"><span>Mid</span><span>${formatPercentRatio(band.mid)}</span></div>
-                <div class="row"><span>High</span><span>${formatPercentRatio(band.high)}</span></div>
+        <div class="section-title">Tracking</div>
+        <div class="row"><span>Usable</span><span>${tracking.usable ? "YES" : "NO"}</span></div>
+        <div class="row"><span>Correlation</span><span>${formatFixed(tracking.corr, 4)}</span></div>
+        <div class="row"><span>Lag</span><span>${formatFixed(tracking.lag_ms, 2, " ms")}</span></div>
+        <div class="row"><span>Error RMS</span><span>${formatFixed(tracking.tracking_error_rms, 4)}</span></div>
 
-                <div class="section-title">Tracking</div>
-                <div class="row"><span>Tracking Score</span><span>${formatMaybe(tracking.tracking_score)}</span></div>
-                <div class="row"><span>Delay</span><span>${formatMaybe(tracking.delay_ms, " ms")}</span></div>
-                <div class="row"><span>Overshoot</span><span>${formatMaybe(tracking.overshoot)}</span></div>
+        <div class="section-title">Recommended PID Delta</div>
+        <div class="row"><span>P</span><span>${deltaToPercentText(pid.p)}</span></div>
+        <div class="row"><span>D</span><span>${deltaToPercentText(pid.d)}</span></div>
+        <div class="row"><span>FF</span><span>${deltaToPercentText(pid.ff)}</span></div>
 
-                <div class="section-title">Recommended PID</div>
-                <div class="row"><span>P</span><span>${a.recommended_pid ? a.recommended_pid.P : "N/A"} (${a.pid_suggestions ? a.pid_suggestions.p_adjustment_percent : "N/A"}%)</span></div>
-                <div class="row"><span>D</span><span>${a.recommended_pid ? a.recommended_pid.D : "N/A"} (${a.pid_suggestions ? a.pid_suggestions.d_adjustment_percent : "N/A"}%)</span></div>
-                <div class="row"><span>FF</span><span>${a.recommended_pid ? a.recommended_pid.FF : "N/A"} (${a.pid_suggestions ? a.pid_suggestions.ff_adjustment_percent : "N/A"}%)</span></div>
+        <div class="section-title">Recommendation</div>
+        <ul class="bullet-list">
+          <li>${escapeHtml(a.recommendation_text || "No recommendation text available.")}</li>
+          ${actions.map(item => `<li>${escapeHtml(item)}</li>`).join("")}
+          ${warnings.map(item => `<li>${escapeHtml("Warning: " + item)}</li>`).join("")}
+        </ul>
+      </div>
+    `;
 
-                <div class="section-title">AeroTune Objective</div>
-                <ul class="bullet-list">
-                    <li>${tuningObjective}</li>
-                    ${notes.length ? notes.map(item => `<li>${item}</li>`).join("") : "<li>No detailed notes available.</li>"}
-                </ul>
-            </div>
-        `;
-        container.innerHTML += html;
-    }
+    container.innerHTML += html;
+  }
 }
 
-function generateCLI(axes) {
-    const lines = [
-        "# AeroTune CLI preview",
-        "# Goal: stable, efficient high-speed flight"
-    ];
+function generateCLI(analysis) {
+  const lines = [
+    "# AeroTune CLI delta preview",
+    "# These are percentage deltas, not final PID values.",
+    "# Apply them to your CURRENT tune manually."
+  ];
 
-    if (axes.gyro_x && axes.gyro_x.recommended_pid) {
-        lines.push(`set p_roll = ${axes.gyro_x.recommended_pid.P}`);
-        lines.push(`set d_roll = ${axes.gyro_x.recommended_pid.D}`);
-        lines.push(`set feedforward_roll = ${axes.gyro_x.recommended_pid.FF}`);
-    }
+  const axes = analysis.axes || {};
+  const order = [
+    ["roll", "ROLL"],
+    ["pitch", "PITCH"],
+    ["yaw", "YAW"]
+  ];
 
-    if (axes.gyro_y && axes.gyro_y.recommended_pid) {
-        lines.push(`set p_pitch = ${axes.gyro_y.recommended_pid.P}`);
-        lines.push(`set d_pitch = ${axes.gyro_y.recommended_pid.D}`);
-        lines.push(`set feedforward_pitch = ${axes.gyro_y.recommended_pid.FF}`);
-    }
-
-    if (axes.gyro_z && axes.gyro_z.recommended_pid) {
-        lines.push(`set p_yaw = ${axes.gyro_z.recommended_pid.P}`);
-        lines.push(`set feedforward_yaw = ${axes.gyro_z.recommended_pid.FF}`);
-    }
-
-    const refAxis = axes.gyro_x || axes.gyro_y || axes.gyro_z;
-    if (refAxis && refAxis.peak_frequency_hz) {
-        lines.push("");
-        lines.push("# Reference frequency insight");
-        lines.push(`# displayed_peak_hz = ${refAxis.peak_frequency_hz}`);
-        if (refAxis.global_peak_hz !== undefined) {
-            lines.push(`# global_peak_hz = ${refAxis.global_peak_hz}`);
-        }
-        if (refAxis.rpm_estimate) {
-            lines.push(`# estimated_motor_order_rpm = ${refAxis.rpm_estimate}`);
-        }
-    }
+  for (const [key, label] of order) {
+    const axis = axes[key];
+    if (!axis) continue;
 
     lines.push("");
-    lines.push("save");
+    lines.push(`# ${label}`);
+    lines.push(`# issue: ${axis.issue || "unknown"}`);
+    lines.push(`# confidence: ${axis.confidence ?? "N/A"}`);
+    lines.push(`# valid_for_pid: ${axis.valid_for_pid ? "yes" : "no"}`);
 
-    document.getElementById("cliBox").value = lines.join("\n");
+    const pid = axis.pid_delta_pct || {};
+    lines.push(`# P delta: ${deltaToPercentText(pid.p)}`);
+    lines.push(`# D delta: ${deltaToPercentText(pid.d)}`);
+    lines.push(`# FF delta: ${deltaToPercentText(pid.ff)}`);
+
+    if (axis.recommendation_text) {
+      lines.push(`# note: ${axis.recommendation_text}`);
+    }
+  }
+
+  lines.push("");
+  lines.push("# Example manual math:");
+  lines.push("# new_P = current_P * (1 + delta)");
+  lines.push("# new_D = current_D * (1 + delta)");
+  lines.push("# new_FF = current_FF * (1 + delta)");
+
+  return lines.join("\n");
+}
+
+function renderCLI(analysis) {
+  const cliBox = document.getElementById("cliBox");
+  if (!cliBox) return;
+  cliBox.value = generateCLI(analysis);
+}
+
+async function renderPlots() {
+  try {
+    const res = await fetch("/plot");
+    const payload = await res.json();
+    if (!res.ok) {
+      throw new Error(payload.error || "Could not load plots.");
+    }
+
+    renderGyroChart(payload);
+    renderFreqChart(payload);
+
+    document.getElementById("gyroCard")?.classList.remove("hidden");
+    document.getElementById("fftCard")?.classList.remove("hidden");
+  } catch (err) {
+    console.warn(err);
+  }
+}
+
+function renderGyroChart(payload) {
+  const ctx = document.getElementById("gyroChart");
+  if (!ctx || typeof Chart === "undefined") return;
+
+  if (gyroChart) {
+    gyroChart.destroy();
+  }
+
+  gyroChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: payload.time || [],
+      datasets: [
+        {
+          label: "Gyro",
+          data: payload.gyro || [],
+          borderWidth: 1,
+          pointRadius: 0
+        },
+        {
+          label: "Setpoint",
+          data: payload.setpoint || [],
+          borderWidth: 1,
+          pointRadius: 0
+        },
+        {
+          label: "Smoothed",
+          data: payload.simulated || [],
+          borderWidth: 1,
+          pointRadius: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false
+    }
+  });
+}
+
+function renderFreqChart(payload) {
+  const ctx = document.getElementById("freqChart");
+  if (!ctx || typeof Chart === "undefined") return;
+
+  if (freqChart) {
+    freqChart.destroy();
+  }
+
+  freqChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: payload.freqs || [],
+      datasets: [
+        {
+          label: "Spectrum",
+          data: payload.magnitude || [],
+          borderWidth: 1,
+          pointRadius: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false
+    }
+  });
 }
 
 function copyCLI() {
-    const box = document.getElementById("cliBox");
-    box.select();
-    document.execCommand("copy");
-    setStatus("CLI copied to clipboard.", "ok");
+  const cliBox = document.getElementById("cliBox");
+  if (!cliBox) return;
+  navigator.clipboard.writeText(cliBox.value || "");
+  setStatus("CLI preview copied.", "success");
 }
-
-function makePeakMarker(plotData, maxY) {
-    if (!plotData || !plotData.peak_frequency_hz) return [];
-    return [{
-        label: `Peak ${plotData.peak_frequency_hz} Hz`,
-        data: [
-            { x: plotData.peak_frequency_hz, y: 0 },
-            { x: plotData.peak_frequency_hz, y: maxY }
-        ],
-        parsing: false,
-        borderWidth: 1.2,
-        pointRadius: 0,
-        fill: false
-    }];
-}
-
-async function loadGraph() {
-    const res = await fetch("/plot");
-    const data = await res.json();
-
-    if (!res.ok || data.error) {
-        throw new Error(data.error || "Could not load plot data");
-    }
-
-    const timeSlice = 700;
-    const freqSlice = 700;
-    const magSlice = data.magnitude.slice(0, freqSlice);
-    const maxY = magSlice.length ? Math.max(...magSlice, 1) : 1;
-
-    if (gyroChart) gyroChart.destroy();
-    if (freqChart) freqChart.destroy();
-
-    gyroChart = new Chart(document.getElementById("gyroChart"), {
-        type: "line",
-        data: {
-            labels: data.time.slice(0, timeSlice),
-            datasets: [
-                { label: "Gyro", data: data.gyro.slice(0, timeSlice), borderWidth: 1.4, pointRadius: 0 },
-                { label: "Setpoint", data: data.setpoint.slice(0, timeSlice), borderWidth: 1.2, pointRadius: 0 },
-                { label: "Smoothed", data: data.simulated.slice(0, timeSlice), borderWidth: 1.2, pointRadius: 0 }
-            ]
-        },
-        options: {
-            responsive: true,
-            animation: false,
-            scales: {
-                x: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(148,163,184,0.08)" } },
-                y: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(148,163,184,0.08)" } }
-            },
-            plugins: {
-                legend: { labels: { color: "#e2e8f0" } }
-            }
-        }
-    });
-
-    freqChart = new Chart(document.getElementById("freqChart"), {
-        type: "line",
-        data: {
-            datasets: [
-                {
-                    label: "Magnitude",
-                    data: data.freqs.slice(0, freqSlice).map((x, i) => ({ x, y: data.magnitude[i] })),
-                    parsing: false,
-                    borderWidth: 1.4,
-                    pointRadius: 0
-                },
-                ...makePeakMarker(data, maxY)
-            ]
-        },
-        options: {
-            responsive: true,
-            animation: false,
-            scales: {
-                x: {
-                    type: "linear",
-                    ticks: { color: "#94a3b8" },
-                    grid: { color: "rgba(148,163,184,0.08)" },
-                    title: { display: true, text: "Frequency (Hz)", color: "#94a3b8" }
-                },
-                y: {
-                    ticks: { color: "#94a3b8" },
-                    grid: { color: "rgba(148,163,184,0.08)" },
-                    title: { display: true, text: "Magnitude", color: "#94a3b8" }
-                }
-            },
-            plugins: {
-                legend: { labels: { color: "#e2e8f0" } }
-            }
-        }
-    });
-}
+</script>
 </script>
 </body>
 </html>

@@ -50,8 +50,9 @@ def save_upload(file):
     suffix = 1
     stem = path.stem
     ext = path.suffix or ".csv"
+
     while path.exists():
-        path = UPLOAD_DIR / ("%s_%s%s" % (stem, suffix, ext))
+        path = UPLOAD_DIR / f"{stem}_{suffix}{ext}"
         suffix += 1
 
     bytes_written = 0
@@ -85,6 +86,7 @@ def build_plot_payload(df):
 
     roll_candidates = ["setpoint_roll", "rc_command_roll", "rc_roll", "roll_setpoint"]
     setpoint_col = next((c for c in roll_candidates if c in df.columns), None)
+
     if setpoint_col is not None:
         setpoint = df[setpoint_col].to_numpy(dtype=float)
     else:
@@ -129,15 +131,87 @@ def build_plot_payload(df):
     }
 
 
+def build_ui_analysis(raw_analysis):
+    """
+    Converts analyzer.py output into a UI-friendly shape while keeping the raw
+    analysis untouched.
+    """
+    axes = raw_analysis.get("axes", {}) or {}
+
+    ui_axes = {}
+    for axis_name in ("roll", "pitch", "yaw"):
+        axis = axes.get(axis_name, {}) or {}
+        signal = axis.get("signal", {}) or {}
+        tracking = axis.get("tracking", {}) or {}
+        pid_delta = axis.get("pid_delta_pct", {}) or {}
+
+        ui_axes[axis_name] = {
+            "axis_name": axis_name.upper(),
+            "issue": axis.get("issue", "unknown"),
+            "status": axis.get("status", "unknown"),
+            "valid_for_pid": bool(axis.get("valid_for_pid", False)),
+            "confidence": axis.get("confidence"),
+            "recommendation_text": axis.get("recommendation_text", ""),
+            "pid_delta_pct": {
+                "p": pid_delta.get("p", 0.0),
+                "d": pid_delta.get("d", 0.0),
+                "ff": pid_delta.get("ff", 0.0),
+            },
+            "signal": {
+                "dominant_freq_hz": signal.get("dominant_freq_hz"),
+                "spectral_centroid_hz": signal.get("spectral_centroid_hz"),
+                "low_band_energy": signal.get("low_band_energy"),
+                "mid_band_energy": signal.get("mid_band_energy"),
+                "high_band_energy": signal.get("high_band_energy"),
+                "total_band_energy": signal.get("total_band_energy"),
+                "rms": signal.get("rms"),
+                "peak_to_peak": signal.get("peak_to_peak"),
+            },
+            "tracking": {
+                "usable": tracking.get("usable"),
+                "corr": tracking.get("corr"),
+                "lag_ms": tracking.get("lag_ms"),
+                "tracking_error_rms": tracking.get("tracking_error_rms"),
+            },
+            "warnings": axis.get("warnings", []) or [],
+            "actions": axis.get("actions", []) or [],
+        }
+
+    return {
+        "status": raw_analysis.get("status", "unknown"),
+        "valid_for_pid": bool(raw_analysis.get("valid_for_pid", False)),
+        "summary": raw_analysis.get("summary", ""),
+        "warnings": raw_analysis.get("warnings", []) or [],
+        "global_actions": raw_analysis.get("global_actions", []) or [],
+        "sample_rate_hz": raw_analysis.get("sample_rate_hz"),
+        "duration_s": raw_analysis.get("duration_s"),
+        "drone_size": raw_analysis.get("drone_size"),
+        "axes": ui_axes,
+        "recommendations": raw_analysis.get("recommendations", []) or [],
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 def home():
     try:
         with open("static/index.html", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        return HTMLResponse("<h1>Error loading UI</h1><p>static/index.html was not found.</p>", status_code=500)
+        return HTMLResponse(
+            """
+            <h1>Error loading UI</h1>
+            <p>static/index.html was not found.</p>
+            """,
+            status_code=500,
+        )
     except Exception as e:
-        return HTMLResponse("<h1>Error loading UI</h1><p>%s</p>" % e, status_code=500)
+        return HTMLResponse(
+            f"""
+            <h1>Error loading UI</h1>
+            <p>{e}</p>
+            """,
+            status_code=500,
+        )
 
 
 @app.post("/upload-log")
@@ -147,8 +221,10 @@ async def upload_log(file=File(...), drone_size=Form("7")):
     try:
         if not file.filename:
             return error_response("No file name provided.", 400)
+
         if not file.filename.lower().endswith(".csv"):
             return error_response("Only CSV files are allowed.", 400)
+
         if drone_size not in ALLOWED_DRONE_SIZES:
             return error_response("Invalid drone_size. Allowed values: 1, 2, 3, 4, 5, 7.", 400)
 
@@ -161,15 +237,19 @@ async def upload_log(file=File(...), drone_size=Form("7")):
                 "Could not parse CSV. Make sure the file includes usable time and gyro data.",
                 400,
             )
+
         if df.empty:
             return error_response("Parsed file is empty after preprocessing.", 400)
 
-        result = detect_oscillation(df, drone_size)
+        analysis_raw = detect_oscillation(df, drone_size)
+        analysis_ui = build_ui_analysis(analysis_raw)
+
         return {
             "filename": path.name,
             "rows": int(len(df)),
             "columns": list(df.columns),
-            "analysis": result,
+            "analysis": analysis_ui,
+            "analysis_raw": analysis_raw,
         }
 
     except ValueError as e:
@@ -196,6 +276,7 @@ def plot():
             return error_response("Uploaded file could not be parsed for plotting.", 400)
 
         return build_plot_payload(df)
+
     except ValueError as e:
         return error_response(str(e), 400)
     except Exception as e:
