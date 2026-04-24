@@ -554,7 +554,7 @@
       <div class="hero-topline">FPV BLACKBOX ANALYSIS • PID TUNING ASSISTANT</div>
       <h1>⚡ AeroTune</h1>
       <p class="hero-lead">
-        Upload a Betaflight CSV. Pick the feel you want. Get conservative PID percentage moves based on real flight data — not guesses.
+        Upload a Betaflight CSV. Pick the feel you want. Get simple FPV-feel explanations based on real flight data — not guesses.
       </p>
 
       <div class="hero-stat-grid">
@@ -563,8 +563,8 @@
           <div class="hero-stat-label">Best log window</div>
         </div>
         <div class="hero-stat">
-          <div class="hero-stat-value">P / I / D / FF</div>
-          <div class="hero-stat-label">Tuning output</div>
+          <div class="hero-stat-value">Feel Notes</div>
+          <div class="hero-stat-label">Pilot-readable output</div>
         </div>
         <div class="hero-stat">
           <div class="hero-stat-value">FFT + Tracking</div>
@@ -648,54 +648,9 @@
       </div>
 
       <div class="callout-strong">
-        AeroTune does not guess final PID numbers. <span>It returns conservative percentage changes so pilots can apply them to their current tune and test safely.</span>
+        AeroTune does not guess final PID numbers. <span>It explains what the log suggests the quad feels like so pilots can test small changes safely.</span>
       </div>
       <div id="status" class="status">Waiting for upload.</div>
-    </div>
-
-    <div class="card">
-      <h2>Optional: Current PID / FF Values</h2>
-      <p class="tiny">
-        Enter your current values if you want AeroTune to calculate actual suggested numbers from the returned percentage deltas.
-      </p>
-
-      <div class="grid grid-3">
-        <div class="metric-box">
-          <div class="metric-label">Roll</div>
-          <label for="rollP">P</label>
-          <input id="rollP" type="number" step="0.1" placeholder="ex: 60" />
-          <label for="rollI" style="margin-top:10px;">I</label>
-          <input id="rollI" type="number" step="0.1" placeholder="ex: 70" />
-          <label for="rollD" style="margin-top:10px;">D</label>
-          <input id="rollD" type="number" step="0.1" placeholder="ex: 30" />
-          <label for="rollFF" style="margin-top:10px;">FF</label>
-          <input id="rollFF" type="number" step="0.1" placeholder="ex: 80" />
-        </div>
-
-        <div class="metric-box">
-          <div class="metric-label">Pitch</div>
-          <label for="pitchP">P</label>
-          <input id="pitchP" type="number" step="0.1" placeholder="ex: 65" />
-          <label for="pitchI" style="margin-top:10px;">I</label>
-          <input id="pitchI" type="number" step="0.1" placeholder="ex: 75" />
-          <label for="pitchD" style="margin-top:10px;">D</label>
-          <input id="pitchD" type="number" step="0.1" placeholder="ex: 32" />
-          <label for="pitchFF" style="margin-top:10px;">FF</label>
-          <input id="pitchFF" type="number" step="0.1" placeholder="ex: 85" />
-        </div>
-
-        <div class="metric-box">
-          <div class="metric-label">Yaw</div>
-          <label for="yawP">P</label>
-          <input id="yawP" type="number" step="0.1" placeholder="ex: 50" />
-          <label for="yawI">I</label>
-          <input id="yawI" type="number" step="0.1" placeholder="ex: 80" />
-          <label for="yawD" style="margin-top:10px;">D</label>
-          <input id="yawD" type="number" step="0.1" placeholder="ex: 0" />
-          <label for="yawFF" style="margin-top:10px;">FF</label>
-          <input id="yawFF" type="number" step="0.1" placeholder="ex: 70" />
-        </div>
-      </div>
     </div>
 
     <div class="card">
@@ -846,7 +801,7 @@
         await renderPlots();
 
         if (data.analysis.valid_for_pid) {
-          setStatus("Analysis complete. Conservative Betaflight-based percentage changes are available.", "good");
+          setStatus("Analysis complete. Feel-based tuning notes are ready.", "good");
         } else {
           setStatus("Analysis complete. Diagnosis is available, but PID advice is limited.", "warn");
         }
@@ -950,9 +905,9 @@ tuningMode === "efficient" || tuningMode === "locked_in" || tuningMode === "floa
             <div class="metric-value">${fixed(analysis.duration_s, 3, " s")}</div>
           </div>
           <div class="metric-box">
-            <div class="metric-label">PID Advice</div>
+            <div class="metric-label">Tuning Notes</div>
             <div class="metric-value ${analysis.valid_for_pid ? "good" : "warn"}">
-              ${analysis.valid_for_pid ? "Allowed" : "Diagnosis Only"}
+              ${analysis.valid_for_pid ? "Ready" : "Diagnosis Only"}
             </div>
           </div>
           ${renderValidation(validation)}
@@ -1014,19 +969,7 @@ tuningMode === "efficient" || tuningMode === "locked_in" || tuningMode === "floa
           <div class="row"><span>RMS</span><span>${fixed(signal.rms, 4)}</span></div>
           <div class="row"><span>Peak-to-Peak</span><span>${fixed(signal.peak_to_peak, 4)}</span></div>
 
-          <div class="section-title">Suggested PID Delta</div>
-          <div class="row"><span>P</span><span>${pctText(pid.p)}</span></div>
-          <div class="row"><span>I</span><span>${pctText(pid.i)}</span></div>
-          <div class="row"><span>D</span><span>${pctText(pid.d)}</span></div>
-          <div class="row"><span>FF</span><span>${pctText(pid.ff)}</span></div>
-
-          <div class="section-title">Suggested Actual Values</div>
-          <div class="row"><span>P</span><span>${adjustedText(current.p, pid.p)}</span></div>
-          <div class="row"><span>I</span><span>${adjustedText(current.i, pid.i)}</span></div>
-          <div class="row"><span>D</span><span>${adjustedText(current.d, pid.d)}</span></div>
-          <div class="row"><span>FF</span><span>${adjustedText(current.ff, pid.ff)}</span></div>
-
-          <div class="section-title">Simple Recommendation</div>
+          <div class="section-title">Flight Feel Readout</div>
           <div class="soft-note">${safe(axis.recommendation_text)}</div>
 
           <div class="section-title">What To Do</div>
@@ -1042,9 +985,8 @@ tuningMode === "efficient" || tuningMode === "locked_in" || tuningMode === "floa
 
     function renderManualNotes(analysis, tuningMode) {
       const lines = [];
-      lines.push("# AeroTune manual tune notes");
+      lines.push("# AeroTune feel-based tune notes");
       lines.push(`# selected_mode: ${prettyMode(tuningMode)}`);
-      lines.push(`# backend_goal_used: ${analysis.tuning_goal}`);
       lines.push(`# summary: ${analysis.summary}`);
       lines.push("");
 
@@ -1052,44 +994,21 @@ tuningMode === "efficient" || tuningMode === "locked_in" || tuningMode === "floa
         const axis = analysis.axes[key];
         if (!axis) continue;
 
-        const pid = axis.pid_delta_pct || {};
-        const current = getCurrentPidInputs(key);
-
         lines.push(`[${axis.axis_name}]`);
-        lines.push(`issue = ${axis.issue}`);
         lines.push(`feel = ${axis.feel}`);
         lines.push(`confidence = ${axis.confidence}`);
-        lines.push(`valid_for_pid = ${axis.valid_for_pid}`);
-        lines.push(`P delta = ${pctText(pid.p)}`);
-        lines.push(`I delta = ${pctText(pid.i)}`);
-        lines.push(`D delta = ${pctText(pid.d)}`);
-        lines.push(`FF delta = ${pctText(pid.ff)}`);
-
-        if (Number.isFinite(current.p)) {
-          lines.push(`P new = ${adjustedValue(current.p, pid.p).toFixed(2)} (from ${current.p})`);
+        lines.push(`main_read = ${axis.recommendation_text}`);
+        lines.push("what_to_try:");
+        for (const item of (axis.actions || [])) {
+          lines.push(`- ${item}`);
         }
-        if (Number.isFinite(current.i)) {
-          lines.push(`I new = ${adjustedValue(current.i, pid.i).toFixed(2)} (from ${current.i})`);
-        }
-        if (Number.isFinite(current.d)) {
-          lines.push(`D new = ${adjustedValue(current.d, pid.d).toFixed(2)} (from ${current.d})`);
-        }
-        if (Number.isFinite(current.ff)) {
-          lines.push(`FF new = ${adjustedValue(current.ff, pid.ff).toFixed(2)} (from ${current.ff})`);
-        }
-
-        lines.push(`note = ${axis.recommendation_text}`);
         lines.push("");
       }
 
-      lines.push("Math:");
-      lines.push("new_value = current_value * (1 + delta)");
-      lines.push("");
-      lines.push("Reminder:");
-      lines.push("Positive delta = increase that term.");
-      lines.push("Negative delta = decrease that term.");
-      lines.push("Use one small change step at a time.");
-      lines.push("If D goes up, check motor temperature after a short flight.");
+      lines.push("Pilot reminder:");
+      lines.push("Use one small change at a time, then fly another clean 30–120 second log.");
+      lines.push("Judge the tune by feel: stick connection, bounceback, propwash, heat, and smoothness.");
+      lines.push("If the motors get hot or the quad sounds rough, back off and check the build.");
 
       document.getElementById("cliBox").value = lines.join("\n");
     }

@@ -300,55 +300,64 @@ def _feel_text(issue: str, goal: str) -> str:
     return "Mostly clean / efficient"
 
 def _actions_for_issue(issue: str, goal: str) -> List[str]:
-    base = []
+    base: List[str] = []
 
     if issue == "high_frequency_noise":
         base.extend([
-            "Noise looks high. Lower P and D a little.",
-            "Fix props, motors, filtering, or frame problems before pushing tune harder.",
-            "Keep D conservative here because D can amplify noise and heat motors.",
+            "This would probably feel buzzy, harsh, or nervous in the sticks.",
+            "The drone may sound rough and motors may come down warmer than they should.",
+            "Before chasing tune, check props, motors, frame screws, stack mounting, and filtering.",
+            "Tune direction: calm it down. Do not push D harder until the build is mechanically clean.",
         ])
     elif issue == "mid_frequency_vibration":
         base.extend([
-            "Back off P and D a little.",
-            "Check prop balance, motor condition, stack mounting, and frame vibration.",
+            "This would probably feel shaky or rough instead of smooth and planted.",
+            "It often points to prop/motor/frame vibration getting into the gyro.",
+            "Tune direction: soften the tune slightly and inspect the build before trying to make it sharper.",
         ])
     elif issue == "low_frequency_oscillation":
         base.extend([
-            "Reduce P a little first.",
-            "If it still bounces, tune D carefully instead of making large jumps.",
+            "This would probably feel like a slow wobble, bounce, or loose rocking motion.",
+            "The quad is likely correcting too hard and then swinging back the other way.",
+            "Tune direction: make the control loop less aggressive before adding more sharpness.",
         ])
     elif issue == "drift_or_weak_hold":
         base.extend([
-            "Attitude hold looks weak.",
-            "Increase I slightly to improve hold through throttle changes and drift.",
+            "This would probably feel like the quad does not hold attitude well when throttle changes.",
+            "It may feel like it slowly leans, floats away, or needs constant correction.",
+            "Tune direction: improve hold so it stays more planted through throttle changes.",
         ])
     elif issue == "poor_tracking":
         base.extend([
-            "Response looks soft or disconnected from setpoint.",
-            "A small P increase and FF increase can improve locked-in stick tracking.",
+            "This would probably feel disconnected from your sticks.",
+            "You move the stick, but the quad does not follow cleanly or immediately.",
+            "Tune direction: make the response more direct, but only if the log is clean enough to support it.",
         ])
     elif issue == "slow_response":
         base.extend([
-            "Response looks delayed.",
-            "A small FF increase is usually the safest first move for response.",
+            "This would probably feel lazy, delayed, or floaty even when you are asking it to move.",
+            "The quad is following, but it is late getting there.",
+            "Tune direction: add response carefully instead of making the whole tune aggressive.",
         ])
     elif issue == "propwash_or_bounceback":
         base.extend([
-            "This looks like bounceback or propwash.",
-            "Increase D only as much as needed, because excess D can heat motors.",
-            "If the build is clean, consider D Max 20–30% above base D instead of making base D too high.",
-            "After D changes, do a short flight and check motor temperature.",
+            "This would probably show up after flips, drops, hard turns, or throttle chops.",
+            "You may feel a bounce, shake, or washout when the props hit dirty air.",
+            "Tune direction: add damping carefully, then check motor temps after a short test flight.",
         ])
     else:
-        base.append("Log looks mostly clean. Only tiny changes make sense.")
+        base.extend([
+            "This log looks mostly clean.",
+            "The quad should already feel fairly predictable.",
+            "Tune direction: make only tiny feel-based changes instead of chasing numbers.",
+        ])
 
     if goal == "efficient":
-        base.append("Goal is efficient/smooth, so changes stay smaller and safer.")
+        base.append("Because you picked Efficient, the safest move is keeping the quad smooth, cool, and predictable.")
     elif goal == "locked_in":
-        base.append("Goal is locked-in response, so P, I, and FF get priority only when the signal supports it.")
+        base.append("Because you picked Locked-In, the goal is a more connected stick feel without making it twitchy or hot.")
     elif goal == "floaty":
-        base.append("Goal is floaty/soft, so P and FF are softened unless correction is clearly needed.")
+        base.append("Because you picked Floaty, the goal is softer movement and less twitch without making it sloppy.")
 
     return base
 
@@ -362,19 +371,34 @@ def _warnings_for_goal(goal: str) -> List[str]:
     return []
 
 def _recommendation_text(axis: str, issue: str, goal: str, delta: Dict[str, float], valid_for_pid: bool) -> str:
+    axis_label = axis.upper()
+
     if not valid_for_pid:
-        return f"{axis.upper()}: diagnosis only. Data confidence is too low for safe PID moves."
+        return f"{axis_label}: I can read the behavior, but this log is not clean enough for confident tuning advice. Retake a better log before trusting changes."
 
-    parts = []
-    for key in ("p", "i", "d", "ff"):
-        val = delta[key] * 100.0
-        if abs(val) >= 0.05:
-            parts.append(f"{key.upper()} {'+' if val > 0 else ''}{val:.1f}%")
+    feel_map = {
+        "high_frequency_noise": f"{axis_label}: This looks like a noisy/harsh axis. In the air it would probably feel buzzy, nervous, or rough instead of smooth.",
+        "mid_frequency_vibration": f"{axis_label}: This looks like vibration getting into the gyro. It would probably feel shaky or unsettled, especially when throttle changes.",
+        "low_frequency_oscillation": f"{axis_label}: This looks like a slower wobble or bounce. It may feel like the quad is over-correcting instead of holding steady.",
+        "drift_or_weak_hold": f"{axis_label}: This looks like weak hold. It may feel like the quad slowly leans or needs extra correction when throttle changes.",
+        "poor_tracking": f"{axis_label}: This looks like soft stick tracking. It may feel like your stick input and the quad are not fully connected.",
+        "slow_response": f"{axis_label}: This looks delayed. It may feel lazy, floaty, or late when you try to snap into a move.",
+        "propwash_or_bounceback": f"{axis_label}: This looks like propwash or bounceback. You may notice shake after flips, drops, hard turns, or throttle chops.",
+        "mostly_clean": f"{axis_label}: This looks mostly clean. Do not chase big changes; tune by feel from here.",
+    }
 
-    if not parts:
-        return f"{axis.upper()}: {issue.replace('_', ' ')} detected, but no change is recommended."
+    base = feel_map.get(issue, f"{axis_label}: This axis has a behavior worth reviewing by feel.")
 
-    return f"{axis.upper()}: {issue.replace('_', ' ')} for {goal.replace('_', ' ')} -> " + ", ".join(parts)
+    if goal == "efficient":
+        goal_text = "For an efficient feel, keep it smooth and calm instead of chasing a super sharp response."
+    elif goal == "locked_in":
+        goal_text = "For a locked-in feel, aim for stronger stick connection while watching for heat, twitchiness, or bounceback."
+    elif goal == "floaty":
+        goal_text = "For a floaty feel, soften the response so it flows more, but do not let it become delayed or sloppy."
+    else:
+        goal_text = "Tune this in small steps and judge the next flight by feel."
+
+    return f"{base} {goal_text}"
 
 
 def detect_oscillation(
@@ -536,12 +560,12 @@ def detect_oscillation(
     if valid_axis_count == 0:
         summary = "Diagnosis available, but confidence is too low for safe PID changes."
     else:
-        summary = f"Analysis complete using Betaflight-based tuning logic for a {tuning_goal.replace('_', ' ')} feel. Conservative PID deltas are available."
+        summary = f"Analysis complete using Betaflight-based tuning logic for a {tuning_goal.replace('_', ' ')} feel. Review the feel-based notes for each axis."
 
     global_actions.append("Use small changes and test one step at a time.")
     global_actions.append("If D goes up, do a short flight and check motor temperature before continuing.")
     global_actions.append("For bounceback or propwash on a clean build, consider D Max 20–30% above base D instead of making base D too high.")
-    global_actions.append("Final real PID numbers come from applying these deltas to your current tune.")
+    global_actions.append("Use the feel notes to decide what to test next; do not chase numbers blindly.")
 
     return {
         "status": "ok",
