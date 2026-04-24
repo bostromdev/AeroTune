@@ -1,4 +1,6 @@
+
 !uploads/.gitkeep
+*.bak
 *.pyc
 *.save
 .DS_Store
@@ -6,4 +8,5 @@
 __pycache__/
 sample_logs/*.csv
 static/index_original.html
+uploads/
 uploads/*

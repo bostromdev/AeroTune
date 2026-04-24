@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,83 +6,98 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-
-AXIS_MAP = {
+AXES = {
     "roll": ("gyro_x", "setpoint_roll"),
     "pitch": ("gyro_y", "setpoint_pitch"),
     "yaw": ("gyro_z", "setpoint_yaw"),
 }
 
-GOALS = {
-    "efficient",
-    "locked_in",
-    "floaty",
-    "efficiency",
-    "efficiency_snappy",
-    "efficiency_floaty",
-    "snappy",
-    "smooth",
-    "cinematic",
+GOAL_ALIASES = {
+    "efficient": "efficient",
+    "smooth": "efficient",
+    "efficiency": "efficient",
+    "locked": "locked_in",
+    "locked_in": "locked_in",
+    "snappy": "locked_in",
+    "aggressive": "locked_in",
+    "efficiency_snappy": "locked_in",
+    "floaty": "floaty",
+    "cinematic": "floaty",
+    "efficiency_floaty": "floaty",
 }
 
-GOAL_ALIASES = {
-    "efficiency": "efficient",
-    "efficiency_snappy": "locked_in",
-    "efficiency_floaty": "floaty",
-    "snappy": "locked_in",
-    "smooth": "efficient",
-    "cinematic": "floaty",
-}
+VALID_GOALS = {"efficient", "locked_in", "floaty"}
 
 DRONE_BANDS = {
-    "5": {
-        "gyro_low": (0, 35),
-        "gyro_mid": (35, 90),
-        "gyro_high": (90, 180),
-        "residual_low": (0, 35),
-        "residual_mid": (35, 90),
-        "residual_high": (90, 180),
-        "residual_ultra": (180, 330),
-    },
-    "7": {
-        "gyro_low": (0, 25),
-        "gyro_mid": (25, 70),
-        "gyro_high": (70, 140),
-        "residual_low": (0, 25),
-        "residual_mid": (25, 70),
-        "residual_high": (70, 140),
-        "residual_ultra": (140, 300),
-    },
+    "5": {"low": (0.0, 35.0), "mid": (35.0, 90.0), "high": (90.0, 180.0), "ultra": (180.0, 490.0), "propwash": (45.0, 130.0)},
+    "7": {"low": (0.0, 25.0), "mid": (25.0, 70.0), "high": (70.0, 140.0), "ultra": (140.0, 490.0), "propwash": (35.0, 110.0)},
 }
 
 SOURCE_REFERENCES = [
     "Betaflight PID Tuning Guide: https://betaflight.com/docs/wiki/guides/current/PID-Tuning-Guide",
-    "P controls setpoint tracking and sharpness; too much P can overshoot or oscillate.",
+    "Betaflight Freestyle Tuning Principles: https://betaflight.com/docs/wiki/guides/current/Freestyle-Tuning-Principles",
+    "P controls tracking authority; too much can oscillate or bounce.",
     "I improves attitude hold against wind, CG bias, and throttle changes.",
-    "D damps bounceback and propwash, but it also amplifies gyro noise and can heat motors.",
-    "Feedforward improves stick response without forcing P to do all the response work.",
-    "Yaw D is normally 0; yaw is tuned mainly with P, I, and FF.",
+    "D damps propwash/bounceback, but amplifies noise and can heat motors.",
+    "Feedforward improves stick response without using P as the only sharpness tool.",
+    "Yaw D is normally 0; tune yaw mainly with P, I, and FF.",
+]
+
+ISSUE_LABELS = {
+    "clean": "Clean tune",
+    "propwash": "Propwash",
+    "bounceback": "Bounceback / overshoot",
+    "high_frequency_noise": "Harsh / noisy",
+    "mid_frequency_vibration": "Shaky / rough",
+    "high_throttle_oscillation": "High-throttle oscillation",
+    "low_frequency_oscillation": "Loose / bouncing",
+    "drift_or_weak_hold": "Weak hold / drifting",
+    "poor_tracking": "Soft tracking",
+    "slow_response": "Delayed / soft",
+    "mechanical_noise_suspected": "Mechanical noise suspected",
+    "soft_tracking_error": "Soft tracking",
+}
+
+COMMON_PROBLEM_LIBRARY = [
+    {
+        "id": "props_motors_frame",
+        "label": "Mechanical vibration",
+        "symptoms": ["jello", "rough motors", "random high-frequency noise", "noise on one axis"],
+        "checks": ["props bent/chipped", "motor screws loose", "bell damage", "frame delam/crack", "stack soft mounting"],
+    },
+    {
+        "id": "pid_gain_too_high",
+        "label": "PID gain too high",
+        "symptoms": ["fast oscillation", "hot motors", "rough punch-outs", "bounce at stops"],
+        "checks": ["P too high", "D too high", "TPA needed at high throttle"],
+    },
+    {
+        "id": "dirty_air",
+        "label": "Dirty-air propwash",
+        "symptoms": ["shake on dives", "shake after split-S", "wobble in hard turns", "recovery shake"],
+        "checks": ["D damping", "D Max", "filter/noise health", "props suited to frame"],
+    },
+    {
+        "id": "hold_drift",
+        "label": "Weak hold / drift",
+        "symptoms": ["won't hold angle/rate", "wind drift", "throttle-change attitude slip"],
+        "checks": ["I gain", "anti-gravity behavior", "CG imbalance"],
+    },
+    {
+        "id": "parts_mismatch",
+        "label": "Random-parts build mismatch",
+        "symptoms": ["tune works on one build but not another", "heavy 7 inch feels loose", "high KV/prop combo noisy"],
+        "checks": ["prop pitch", "motor KV", "frame stiffness", "ESC protocol", "filtering", "battery sag"],
+    },
 ]
 
 
-@dataclass
+@dataclass(frozen=True)
 class AxisStats:
-    dominant_gyro_freq_hz: Optional[float]
-    dominant_error_freq_hz: Optional[float]
-
-    gyro_low_ratio: float
-    gyro_mid_ratio: float
-    gyro_high_ratio: float
-
-    residual_low_ratio: float
-    residual_mid_ratio: float
-    residual_high_ratio: float
-    residual_ultra_ratio: float
-    residual_noise_ratio: float
-
+    sample_rate_hz: float
+    duration_s: float
     corr: Optional[float]
     lag_ms: Optional[float]
-
     gyro_rms: float
     setpoint_rms: float
     error_rms: float
@@ -91,8 +105,13 @@ class AxisStats:
     abs_error_p95: float
     abs_error_p99: float
     spike_ratio: float
-
-    propwash_score: float
+    low_ratio: float
+    mid_ratio: float
+    high_ratio: float
+    ultra_ratio: float
+    propwash_ratio: float
+    dominant_freq_hz: Optional[float]
+    gyro_high_ratio: float
     throttle_activity: float
     throttle_error_ratio: float
     high_throttle_error_ratio: float
@@ -100,79 +119,51 @@ class AxisStats:
     quiet_drift_ratio: float
 
 
-
 def normalize_goal(goal: str) -> str:
-    """Public wrapper used by app.main."""
-    return _normalize_goal(goal)
+    raw = str(goal or "efficient").strip().lower().replace("-", "_").replace(" ", "_")
+    return GOAL_ALIASES.get(raw, "efficient")
 
 
-def _normalize_goal(goal: str) -> str:
-    raw = (goal or "efficient").strip().lower().replace("-", "_").replace(" ", "_")
-    mapped = GOAL_ALIASES.get(raw, raw)
-    return mapped if mapped in {"efficient", "locked_in", "floaty"} else "efficient"
-
-
-def _safe_array(values: Any) -> np.ndarray:
-    arr = np.asarray(values, dtype=float)
-    arr = arr[np.isfinite(arr)]
-    return arr
-
-
-def _band_energy(freqs: np.ndarray, mags: np.ndarray, low: float, high: float) -> float:
-    mask = (freqs >= low) & (freqs < high)
-    if not np.any(mask):
+def _rms(values: np.ndarray) -> float:
+    values = np.asarray(values, dtype=float)
+    values = values[np.isfinite(values)]
+    if len(values) == 0:
         return 0.0
-    return float(np.sum(np.square(mags[mask])))
+    return float(np.sqrt(np.mean(np.square(values))))
 
 
-def _spectrum_ratios(signal: np.ndarray, sample_rate_hz: float, bands: Dict[str, Tuple[float, float]]) -> Tuple[Optional[float], Dict[str, float]]:
-    centered = signal - np.mean(signal)
-    if len(centered) < 16 or np.std(centered) < 1e-12:
-        return None, {key: 0.0 for key in bands}
-
-    window = np.hanning(len(centered))
-    fft_vals = np.fft.rfft(centered * window)
-    freqs = np.fft.rfftfreq(len(centered), d=1.0 / sample_rate_hz)
-    mags = np.abs(fft_vals)
-
-    if len(mags):
-        mags[0] = 0.0
-
-    dominant = None
-    if len(mags) > 1 and float(np.max(mags)) > 0:
-        dominant = float(freqs[int(np.argmax(mags))])
-
-    energies = {key: _band_energy(freqs, mags, low, high) for key, (low, high) in bands.items()}
-    total = max(float(sum(energies.values())), 1e-12)
-    ratios = {key: float(value / total) for key, value in energies.items()}
-
-    return dominant, ratios
+def _safe_corr(a: np.ndarray, b: np.ndarray) -> Optional[float]:
+    n = min(len(a), len(b))
+    if n < 64:
+        return None
+    a = np.asarray(a[:n], dtype=float)
+    b = np.asarray(b[:n], dtype=float)
+    if np.std(a) < 1e-9 or np.std(b) < 1e-9:
+        return None
+    value = float(np.corrcoef(a, b)[0, 1])
+    return value if np.isfinite(value) else None
 
 
 def _estimate_lag_ms(setpoint: np.ndarray, gyro: np.ndarray, sample_rate_hz: float) -> Optional[float]:
-    if len(setpoint) < 64 or np.std(setpoint) < 1e-6 or np.std(gyro) < 1e-6:
+    n = min(len(setpoint), len(gyro))
+    if n < 128 or np.std(setpoint[:n]) < 1e-9 or np.std(gyro[:n]) < 1e-9:
         return None
 
-    max_points = 2500
-    if len(setpoint) > max_points:
-        step = int(np.ceil(len(setpoint) / max_points))
-        setpoint = setpoint[::step]
-        gyro = gyro[::step]
-        effective_sample_rate = sample_rate_hz / step
-    else:
-        effective_sample_rate = sample_rate_hz
+    max_points = 2400
+    step = max(1, int(np.ceil(n / max_points)))
+    sp = setpoint[:n:step] - np.mean(setpoint[:n:step])
+    gy = gyro[:n:step] - np.mean(gyro[:n:step])
+    rate = sample_rate_hz / step
 
-    sp = setpoint - np.mean(setpoint)
-    gy = gyro - np.mean(gyro)
-
-    max_lag = min(int(effective_sample_rate * 0.20), len(sp) // 4)
+    max_lag = min(int(rate * 0.15), len(sp) // 4)
     if max_lag < 1:
         return None
 
     lags = np.arange(-max_lag, max_lag + 1)
-    scores = np.empty(len(lags), dtype=float)
+    best_score = -np.inf
+    best_lag = 0
 
-    for idx, lag in enumerate(lags):
+    for lag in lags:
         if lag < 0:
             a = gy[:lag]
             b = sp[-lag:]
@@ -184,640 +175,546 @@ def _estimate_lag_ms(setpoint: np.ndarray, gyro: np.ndarray, sample_rate_hz: flo
             b = sp
 
         if len(a) < 32:
-            scores[idx] = -np.inf
+            continue
+        denom = np.linalg.norm(a) * np.linalg.norm(b)
+        score = float(np.dot(a, b) / denom) if denom > 0 else -np.inf
+        if score > best_score:
+            best_score = score
+            best_lag = int(lag)
+
+    return float(best_lag / rate * 1000.0)
+
+
+def _band_energy(freqs: np.ndarray, spectrum: np.ndarray, low: float, high: float) -> float:
+    mask = (freqs >= low) & (freqs < high)
+    if not np.any(mask):
+        return 0.0
+    return float(np.sum(np.square(spectrum[mask])))
+
+
+def _frequency_stats(signal: np.ndarray, sample_rate_hz: float, bands: Dict[str, Tuple[float, float]]) -> Tuple[float, float, float, float, float, Optional[float]]:
+    """
+    Frequency analysis must preserve high-frequency content.
+    Do not simple-downsample here; downsampling can hide/alias D-term noise.
+    Instead, sample several original-rate chunks and average their band energy.
+    """
+    signal = np.asarray(signal, dtype=float)
+    signal = signal[np.isfinite(signal)]
+
+    if len(signal) < 128:
+        return 0.0, 0.0, 0.0, 0.0, 0.0, None
+
+    chunk_size = min(8192, len(signal))
+    if len(signal) <= chunk_size:
+        starts = [0]
+    else:
+        max_chunks = 8
+        starts = np.linspace(0, len(signal) - chunk_size, num=min(max_chunks, max(2, len(signal) // chunk_size)), dtype=int).tolist()
+
+    energies = {"low": 0.0, "mid": 0.0, "high": 0.0, "ultra": 0.0, "propwash": 0.0}
+    dominant_candidates: List[Tuple[float, float]] = []
+
+    for start in starts:
+        chunk = signal[start:start + chunk_size]
+        centered = chunk - np.mean(chunk)
+        if np.std(centered) < 1e-12:
             continue
 
-        denom = np.linalg.norm(a) * np.linalg.norm(b)
-        scores[idx] = float(np.dot(a, b) / denom) if denom > 0 else -np.inf
+        window = np.hanning(len(centered))
+        spectrum = np.abs(np.fft.rfft(centered * window))
+        freqs = np.fft.rfftfreq(len(centered), d=1.0 / sample_rate_hz)
 
-    best_lag = int(lags[int(np.argmax(scores))])
-    return float(best_lag / effective_sample_rate * 1000.0)
+        if len(spectrum):
+            spectrum[0] = 0.0
+
+        for name in energies:
+            energies[name] += _band_energy(freqs, spectrum, *bands[name])
+
+        if len(spectrum) > 1 and float(np.max(spectrum)) > 0:
+            idx = int(np.argmax(spectrum))
+            dominant_candidates.append((float(spectrum[idx]), float(freqs[idx])))
+
+    total = max(energies["low"] + energies["mid"] + energies["high"] + energies["ultra"], 1e-12)
+    dominant = None
+    if dominant_candidates:
+        dominant = max(dominant_candidates, key=lambda item: item[0])[1]
+
+    return (
+        float(energies["low"] / total),
+        float(energies["mid"] / total),
+        float(energies["high"] / total),
+        float(energies["ultra"] / total),
+        float(energies["propwash"] / total),
+        dominant,
+    )
+
+def _stop_overshoot_ratio(setpoint: np.ndarray, gyro: np.ndarray, sample_rate_hz: float) -> float:
+    n = min(len(setpoint), len(gyro))
+    if n < 256:
+        return 0.0
+
+    max_points = 6000
+    step = max(1, int(np.ceil(n / max_points)))
+    sp = setpoint[:n:step]
+    gy = gyro[:n:step]
+    rate = sample_rate_hz / step
+
+    dsp = np.abs(np.gradient(sp))
+    if np.std(dsp) < 1e-9:
+        return 0.0
+
+    events = np.where(dsp >= np.quantile(dsp, 0.92))[0]
+    if len(events) == 0:
+        return 0.0
+
+    window = max(5, int(0.12 * rate))
+    ratios: List[float] = []
+
+    for idx in events[:: max(1, len(events) // 80)]:
+        lo = max(0, idx - window)
+        hi = min(len(sp), idx + window)
+        if hi - lo < 10:
+            continue
+        command_span = float(np.max(sp[lo:hi]) - np.min(sp[lo:hi]))
+        if command_span < 0.10:
+            continue
+        local_error = np.abs(gy[lo:hi] - sp[lo:hi])
+        ratios.append(float(np.max(local_error) / max(command_span, 1e-9)))
+
+    if not ratios:
+        return 0.0
+    return float(np.percentile(ratios, 80))
 
 
-def _windowed_ratio(numerator: np.ndarray, reference: np.ndarray, top_quantile: float, low_quantile: float) -> float:
-    if len(numerator) == 0 or len(reference) != len(numerator):
-        return 1.0
-
-    hi_cut = float(np.quantile(reference, top_quantile))
-    lo_cut = float(np.quantile(reference, low_quantile))
-
-    hi_mask = reference >= hi_cut
-    lo_mask = reference <= lo_cut
-
-    if not np.any(hi_mask) or not np.any(lo_mask):
-        return 1.0
-
-    hi = float(np.sqrt(np.mean(np.square(numerator[hi_mask]))))
-    lo = float(np.sqrt(np.mean(np.square(numerator[lo_mask]))))
-    return hi / max(lo, 1e-9)
-
-
-def _compute_axis_stats(
-    gyro: np.ndarray,
-    setpoint: np.ndarray,
-    sample_rate_hz: float,
-    band_profile: Dict[str, Tuple[float, float]],
-    throttle: Optional[np.ndarray],
-) -> AxisStats:
-    n = min(len(gyro), len(setpoint))
+def _axis_stats(time: np.ndarray, gyro: np.ndarray, setpoint: np.ndarray, throttle: Optional[np.ndarray], bands: Dict[str, Tuple[float, float]]) -> AxisStats:
+    n = min(len(time), len(gyro), len(setpoint))
+    time = np.asarray(time[:n], dtype=float)
     gyro = np.asarray(gyro[:n], dtype=float)
     setpoint = np.asarray(setpoint[:n], dtype=float)
 
-    finite_mask = np.isfinite(gyro) & np.isfinite(setpoint)
-    gyro = gyro[finite_mask]
-    setpoint = setpoint[finite_mask]
+    dt = np.diff(time)
+    good_dt = dt[np.isfinite(dt) & (dt > 0)]
+    sample_rate_hz = float(1.0 / np.median(good_dt)) if len(good_dt) else 1000.0
+    duration_s = float(time[-1] - time[0]) if len(time) > 1 else 0.0
 
-    error = setpoint - gyro
+    error = gyro - setpoint
     abs_error = np.abs(error)
-    residual = error - np.mean(error)
+    gyro_centered = gyro - np.mean(gyro)
 
-    gyro_bands = {
-        "low": band_profile["gyro_low"],
-        "mid": band_profile["gyro_mid"],
-        "high": band_profile["gyro_high"],
-    }
-    residual_bands = {
-        "low": band_profile["residual_low"],
-        "mid": band_profile["residual_mid"],
-        "high": band_profile["residual_high"],
-        "ultra": band_profile["residual_ultra"],
-    }
+    gyro_rms = _rms(gyro_centered)
+    setpoint_rms = _rms(setpoint)
+    error_rms = _rms(error)
+    error_ratio = float(error_rms / max(setpoint_rms, 0.05))
+    abs_error_p95 = float(np.percentile(abs_error, 95)) if len(abs_error) else 0.0
+    abs_error_p99 = float(np.percentile(abs_error, 99)) if len(abs_error) else 0.0
+    spike_ratio = float(abs_error_p99 / max(abs_error_p95, 1e-9))
 
-    dominant_gyro_freq, gyro_ratios = _spectrum_ratios(gyro, sample_rate_hz, gyro_bands)
-    dominant_error_freq, residual_ratios = _spectrum_ratios(residual, sample_rate_hz, residual_bands)
+    low_ratio, mid_ratio, high_ratio, ultra_ratio, propwash_ratio, dominant_freq = _frequency_stats(error, sample_rate_hz, bands)
+    _, _, gyro_high_ratio, gyro_ultra_ratio, _, _ = _frequency_stats(gyro_centered, sample_rate_hz, bands)
 
-    corr = None
-    if np.std(setpoint) > 1e-6 and np.std(gyro) > 1e-6:
-        value = float(np.corrcoef(setpoint, gyro)[0, 1])
-        corr = value if np.isfinite(value) else None
-
+    corr = _safe_corr(setpoint, gyro)
     lag_ms = _estimate_lag_ms(setpoint, gyro, sample_rate_hz)
 
-    gyro_rms = float(np.sqrt(np.mean(np.square(gyro - np.mean(gyro)))))
-    setpoint_rms = float(np.sqrt(np.mean(np.square(setpoint))))
-    error_rms = float(np.sqrt(np.mean(np.square(error))))
-    error_ratio = error_rms / max(setpoint_rms, 1e-9)
-
-    abs_error_p95 = float(np.quantile(abs_error, 0.95))
-    abs_error_p99 = float(np.quantile(abs_error, 0.99))
-    median_abs = float(np.median(abs_error))
-    spike_ratio = abs_error_p99 / max(median_abs, 1e-9)
-
-    propwash_score = 1.0
     throttle_activity = 0.0
-    throttle_error_ratio = 1.0
-    high_throttle_error_ratio = 1.0
+    throttle_error_ratio = 0.0
+    high_throttle_error_ratio = 0.0
+    quiet_drift_ratio = 0.0
 
     if throttle is not None and len(throttle) >= n:
-        th_full = np.asarray(throttle[:n], dtype=float)
-        th = th_full[finite_mask]
-        if len(th) == len(error) and np.all(np.isfinite(th)) and np.std(th) > 1e-7:
+        th = np.asarray(throttle[:n], dtype=float)
+        if np.all(np.isfinite(th)):
             dth = np.abs(np.gradient(th))
-            throttle_activity = float(np.std(th) + np.mean(dth) * 8.0)
-            residual_abs = np.abs(residual)
+            throttle_activity = float(np.std(th) + np.mean(dth) * 10.0)
 
-            propwash_score = _windowed_ratio(residual_abs, dth, 0.82, 0.45)
-            throttle_error_ratio = _windowed_ratio(residual_abs, dth, 0.80, 0.40)
-            high_throttle_error_ratio = _windowed_ratio(residual_abs, th, 0.80, 0.40)
+            if np.std(dth) > 1e-9:
+                transition_mask = dth >= np.quantile(dth, 0.85)
+                calm_mask = dth <= np.quantile(dth, 0.45)
+                if np.any(transition_mask) and np.any(calm_mask):
+                    throttle_error_ratio = float(_rms(error[transition_mask]) / max(_rms(error[calm_mask]), 1e-9))
 
-    quiet_setpoint = np.abs(setpoint) <= max(0.05, float(np.quantile(np.abs(setpoint), 0.35)))
-    if np.any(quiet_setpoint):
-        quiet_drift_ratio = float(np.sqrt(np.mean(np.square(error[quiet_setpoint]))) / max(error_rms, 1e-9))
-    else:
-        quiet_drift_ratio = 1.0
+            high_mask = th >= np.quantile(th, 0.80)
+            mid_mask = (th >= np.quantile(th, 0.35)) & (th <= np.quantile(th, 0.65))
+            if np.any(high_mask) and np.any(mid_mask):
+                high_throttle_error_ratio = float(_rms(error[high_mask]) / max(_rms(error[mid_mask]), 1e-9))
 
-    # Overshoot after the stick is released / command slows down.
-    d_setpoint = np.abs(np.gradient(setpoint))
-    stop_mask = (np.abs(setpoint) <= float(np.quantile(np.abs(setpoint), 0.50))) & (
-        d_setpoint <= float(np.quantile(d_setpoint, 0.35))
-    )
-    if np.any(stop_mask):
-        stop_overshoot_ratio = float(np.sqrt(np.mean(np.square(error[stop_mask]))) / max(error_rms, 1e-9))
-    else:
-        stop_overshoot_ratio = 1.0
+    quiet_mask = np.abs(setpoint) <= max(0.12, float(np.percentile(np.abs(setpoint), 35)))
+    active_mask = np.abs(setpoint) >= max(0.20, float(np.percentile(np.abs(setpoint), 65)))
+    if np.any(quiet_mask) and np.any(active_mask):
+        quiet_drift_ratio = float(_rms(error[quiet_mask]) / max(_rms(error[active_mask]), 1e-9))
 
     return AxisStats(
-        dominant_gyro_freq_hz=dominant_gyro_freq,
-        dominant_error_freq_hz=dominant_error_freq,
-        gyro_low_ratio=gyro_ratios["low"],
-        gyro_mid_ratio=gyro_ratios["mid"],
-        gyro_high_ratio=gyro_ratios["high"],
-        residual_low_ratio=residual_ratios["low"],
-        residual_mid_ratio=residual_ratios["mid"],
-        residual_high_ratio=residual_ratios["high"],
-        residual_ultra_ratio=residual_ratios["ultra"],
-        residual_noise_ratio=residual_ratios["high"] + residual_ratios["ultra"],
+        sample_rate_hz=sample_rate_hz,
+        duration_s=duration_s,
         corr=corr,
         lag_ms=lag_ms,
         gyro_rms=gyro_rms,
         setpoint_rms=setpoint_rms,
         error_rms=error_rms,
-        error_ratio=float(error_ratio),
+        error_ratio=error_ratio,
         abs_error_p95=abs_error_p95,
         abs_error_p99=abs_error_p99,
-        spike_ratio=float(spike_ratio),
-        propwash_score=float(propwash_score),
-        throttle_activity=float(throttle_activity),
-        throttle_error_ratio=float(throttle_error_ratio),
-        high_throttle_error_ratio=float(high_throttle_error_ratio),
-        stop_overshoot_ratio=float(stop_overshoot_ratio),
-        quiet_drift_ratio=float(quiet_drift_ratio),
+        spike_ratio=spike_ratio,
+        low_ratio=low_ratio,
+        mid_ratio=mid_ratio,
+        high_ratio=high_ratio,
+        ultra_ratio=ultra_ratio,
+        propwash_ratio=propwash_ratio,
+        dominant_freq_hz=dominant_freq,
+        gyro_high_ratio=float(gyro_high_ratio + gyro_ultra_ratio),
+        throttle_activity=throttle_activity,
+        throttle_error_ratio=throttle_error_ratio,
+        high_throttle_error_ratio=high_throttle_error_ratio,
+        stop_overshoot_ratio=_stop_overshoot_ratio(setpoint, gyro, sample_rate_hz),
+        quiet_drift_ratio=quiet_drift_ratio,
     )
 
 
-def _classify_issue(axis: str, stats: AxisStats) -> Tuple[str, float, str]:
-    corr = stats.corr if stats.corr is not None else 0.0
-    lag = abs(stats.lag_ms) if stats.lag_ms is not None else 0.0
+def _is_clean(stats: AxisStats) -> bool:
+    corr_ok = stats.corr is None or stats.corr >= 0.987
+    lag_ok = stats.lag_ms is None or abs(stats.lag_ms) <= 18.0
+    return (
+        corr_ok
+        and lag_ok
+        and stats.error_ratio <= 0.090
+        and stats.abs_error_p99 <= max(0.15, stats.setpoint_rms * 0.20)
+        and stats.throttle_error_ratio <= 1.16
+        and stats.high_throttle_error_ratio <= 1.18
+        and stats.stop_overshoot_ratio <= 0.22
+        and stats.high_ratio <= 0.30
+        and stats.ultra_ratio <= 0.22
+        and stats.mid_ratio <= 0.34
+    )
 
-    clean_tracking = corr >= 0.985 and stats.error_ratio <= 0.115 and lag <= 12.0
-    very_clean_tracking = corr >= 0.992 and stats.error_ratio <= 0.085 and lag <= 8.0
 
-    # IMPORTANT: noise must be checked before clean.
-    # A log can track setpoint well while still showing high-frequency residual error.
-    if stats.residual_noise_ratio >= 0.24 and stats.error_ratio >= 0.055:
-        return "high_frequency_noise", 0.94, "high-frequency tracking residual is dominant"
+def _confidence(stats: AxisStats, base: float) -> float:
+    value = base
+    if stats.duration_s >= 20:
+        value += 0.05
+    if stats.sample_rate_hz >= 250:
+        value += 0.04
+    if stats.corr is not None:
+        value += 0.03
+    return float(np.clip(value, 0.0, 0.98))
 
-    if axis == "yaw" and stats.residual_noise_ratio >= 0.16 and stats.error_ratio >= 0.075:
-        return "yaw_noise_or_roughness", 0.90, "yaw residual has high-frequency roughness"
 
-    if stats.gyro_high_ratio >= 0.34 and stats.error_ratio >= 0.08:
-        return "high_frequency_noise", 0.90, "gyro high-frequency energy is elevated"
+def _classify(axis: str, stats: AxisStats) -> Tuple[str, float, str]:
+    # Clean is NOT first. Problem evidence must win before a log is called clean.
+    noise_band = stats.high_ratio + stats.ultra_ratio
+    residual_noise = (noise_band >= 0.38 and stats.error_ratio > 0.045) or (axis == "yaw" and noise_band >= 0.25 and stats.error_ratio > 0.075)
+    gyro_noise = stats.gyro_high_ratio >= 0.50 and stats.gyro_rms > 0.02
+    if residual_noise or gyro_noise:
+        reason = "high-frequency residual noise" if residual_noise else "high-frequency gyro vibration"
+        return "high_frequency_noise", _confidence(stats, 0.80), reason
 
-    # Mid-frequency vibration / mechanical roughness.
-    if stats.residual_mid_ratio >= 0.30 and stats.error_ratio >= 0.09:
-        return "mid_frequency_vibration", 0.88, "mid-frequency residual vibration is elevated"
+    if stats.high_throttle_error_ratio >= 1.32 and stats.error_ratio > 0.075:
+        return "high_throttle_oscillation", _confidence(stats, 0.77), "error rises mainly at high throttle"
 
-    if stats.gyro_mid_ratio >= 0.42 and stats.error_ratio >= 0.09:
-        return "mid_frequency_vibration", 0.86, "gyro mid-frequency vibration is elevated"
-
-    # Dirty-air and bounceback are bursty and usually tied to throttle/stops.
     dirty_air = (
-        stats.propwash_score >= 1.32
-        and stats.throttle_activity > 0.015
-        and stats.throttle_error_ratio >= 1.18
-        and stats.error_ratio >= 0.10
+        stats.throttle_error_ratio >= 1.20
+        and stats.error_ratio > 0.080
+        and (stats.propwash_ratio >= 0.14 or stats.mid_ratio >= 0.16 or stats.spike_ratio >= 1.15)
     )
-    stop_bounce = (
-        stats.stop_overshoot_ratio >= 1.25
-        and stats.error_ratio >= 0.12
-        and stats.residual_noise_ratio < 0.24
-    )
+    bounceback = stats.stop_overshoot_ratio >= 0.27 and stats.error_ratio > 0.080
+    if dirty_air:
+        return "propwash", _confidence(stats, 0.82), "tracking error spikes around throttle movement / disturbed air"
+    if bounceback:
+        return "bounceback", _confidence(stats, 0.80), "overshoot after command stops"
 
-    if dirty_air or stop_bounce:
-        if axis == "yaw":
-            return "yaw_throttle_roughness", 0.88, "yaw error rises during disturbed or high-load moments"
-        return "propwash_or_bounceback", 0.92, "error rises during throttle/stops/dirty-air moments"
+    if stats.mid_ratio >= 0.42 and stats.error_ratio > 0.055:
+        return "mid_frequency_vibration", _confidence(stats, 0.74), "mid-band residual vibration"
 
-    # Weak hold: low frequency error with quiet-stick / throttle bias, not noise.
-    if (
-        stats.quiet_drift_ratio >= 1.22
-        and stats.error_ratio >= 0.14
-        and stats.residual_noise_ratio < 0.20
-    ):
-        return "drift_or_weak_hold", 0.84, "residual error persists during quiet-stick sections"
+    if stats.low_ratio >= 0.66 and stats.error_ratio > 0.115 and not _is_clean(stats):
+        return "low_frequency_oscillation", _confidence(stats, 0.72), "slow residual wobble with elevated error"
 
-    # Low-frequency oscillation: only call it bounce if tracking is NOT clean and residual is really low-band.
-    if (
-        stats.residual_low_ratio >= 0.72
-        and stats.error_ratio >= 0.16
-        and not clean_tracking
-        and stats.residual_noise_ratio < 0.16
-    ):
-        return "low_frequency_oscillation", 0.84, "dominant low-frequency residual motion"
+    if stats.quiet_drift_ratio >= 1.35 and stats.error_ratio > 0.075:
+        return "drift_or_weak_hold", _confidence(stats, 0.70), "error persists during low stick input"
 
-    if stats.corr is not None and stats.corr < 0.78 and stats.error_ratio >= 0.18:
-        return "poor_tracking", 0.82, "low gyro/setpoint correlation"
+    if stats.corr is not None and stats.corr < 0.86 and stats.error_ratio > 0.080:
+        return "poor_tracking", _confidence(stats, 0.70), "gyro/setpoint correlation is low"
 
-    if stats.lag_ms is not None and stats.lag_ms > 28.0 and stats.error_ratio >= 0.10:
-        return "slow_response", 0.80, "gyro response lags behind setpoint"
+    if stats.lag_ms is not None and stats.lag_ms > 32 and stats.error_ratio > 0.065:
+        return "slow_response", _confidence(stats, 0.68), "gyro response lags setpoint"
 
-    if clean_tracking:
-        return "clean", 0.98 if very_clean_tracking else 0.92, "high setpoint tracking and low residual error"
+    if _is_clean(stats):
+        return "clean", _confidence(stats, 0.90), "high tracking, low residual error, no dominant problem band"
 
-    # Borderline: do not force a fake problem. Give optional feel-based advice only.
-    return "borderline_clean", 0.72, "minor residual movement but no strong Betaflight tuning fault"
+    if stats.error_ratio > 0.095:
+        return "soft_tracking_error", _confidence(stats, 0.66), "residual tracking error is elevated"
+
+    return "clean", _confidence(stats, 0.82), "no major PID problem detected"
 
 
-def _base_delta_for_issue(axis: str, issue: str) -> Dict[str, float]:
+def _base_delta(axis: str, issue: str) -> Dict[str, float]:
     delta = {"p": 0.0, "i": 0.0, "d": 0.0, "ff": 0.0}
 
-    if issue == "high_frequency_noise":
+    if issue == "propwash":
+        if axis == "yaw":
+            delta["p"] = -0.010
+            delta["i"] = 0.010
+        else:
+            delta["p"] = -0.004
+            delta["d"] = 0.030
+    elif issue == "bounceback":
+        if axis == "yaw":
+            delta["p"] = -0.012
+        else:
+            delta["d"] = 0.025
+            delta["p"] = -0.006
+    elif issue == "high_frequency_noise":
         delta["p"] = -0.015
-        delta["d"] = -0.035 if axis != "yaw" else 0.0
-    elif issue == "yaw_noise_or_roughness":
-        delta["p"] = -0.018
-        delta["i"] = 0.0
-        delta["d"] = 0.0
+        delta["d"] = -0.030 if axis != "yaw" else 0.0
     elif issue == "mid_frequency_vibration":
-        delta["p"] = -0.020
-        delta["d"] = -0.020 if axis != "yaw" else 0.0
-    elif issue == "propwash_or_bounceback":
-        delta["p"] = -0.005
-        delta["d"] = 0.030 if axis != "yaw" else 0.0
-    elif issue == "yaw_throttle_roughness":
-        delta["p"] = -0.012
-        delta["i"] = 0.010
-        delta["d"] = 0.0
+        delta["p"] = -0.018
+        delta["d"] = -0.018 if axis != "yaw" else 0.0
+    elif issue == "high_throttle_oscillation":
+        delta["p"] = -0.025
+        delta["d"] = -0.010 if axis != "yaw" else 0.0
     elif issue == "low_frequency_oscillation":
         delta["p"] = -0.030
-        delta["d"] = 0.0
     elif issue == "drift_or_weak_hold":
-        delta["i"] = 0.035
+        delta["i"] = 0.030
     elif issue == "poor_tracking":
-        delta["p"] = 0.020
-        delta["ff"] = 0.020
+        delta["p"] = 0.018
+        delta["ff"] = 0.012
+    elif issue == "soft_tracking_error":
+        delta["p"] = 0.012
+        delta["ff"] = 0.008
     elif issue == "slow_response":
-        delta["ff"] = 0.035
+        delta["ff"] = 0.030
         delta["p"] = 0.008
 
+    if axis == "yaw":
+        delta["d"] = 0.0
     return delta
 
 
-def _apply_goal_bias(delta: Dict[str, float], axis: str, issue: str, goal: str) -> Dict[str, float]:
+def _apply_goal(axis: str, issue: str, delta: Dict[str, float], goal: str) -> Dict[str, float]:
     result = dict(delta)
 
-    if goal == "efficient":
+    if issue == "clean":
+        if goal == "locked_in":
+            result = {"p": 0.008 if axis != "yaw" else 0.004, "i": 0.0, "d": 0.0, "ff": 0.012}
+        elif goal == "floaty":
+            result = {"p": -0.010 if axis != "yaw" else -0.006, "i": 0.0, "d": 0.0, "ff": -0.012}
+        else:
+            result = {"p": 0.0, "i": 0.0, "d": 0.0, "ff": 0.0}
+    elif goal == "efficient":
         result["p"] *= 0.80
-        result["i"] *= 0.90
+        result["i"] *= 0.85
         result["d"] *= 0.70
         result["ff"] *= 0.80
     elif goal == "locked_in":
-        if issue in {"clean", "borderline_clean"}:
-            result["p"] += 0.008 if axis != "yaw" else 0.004
-            result["ff"] += 0.015
-        elif issue in {"poor_tracking", "slow_response"}:
-            result["p"] *= 1.10
-            result["ff"] *= 1.15
-        elif issue == "propwash_or_bounceback" and axis != "yaw":
-            result["d"] += 0.005
-        elif issue in {"high_frequency_noise", "mid_frequency_vibration", "yaw_noise_or_roughness"}:
+        if issue in {"poor_tracking", "soft_tracking_error", "slow_response"}:
+            result["p"] += 0.006 if axis != "yaw" else 0.003
+            result["ff"] += 0.010
+        if issue in {"propwash", "bounceback"} and axis != "yaw":
+            result["d"] += 0.004
+        if issue in {"high_frequency_noise", "mid_frequency_vibration", "high_throttle_oscillation"}:
             result["d"] = min(result["d"], 0.0)
     elif goal == "floaty":
-        if issue in {"clean", "borderline_clean"}:
-            result["p"] -= 0.015 if axis != "yaw" else 0.008
-            result["ff"] -= 0.015
-        elif issue in {"poor_tracking", "slow_response"}:
-            result["ff"] *= 0.75
-        elif issue == "propwash_or_bounceback" and axis != "yaw":
+        if issue in {"poor_tracking", "soft_tracking_error", "slow_response"}:
+            result["p"] -= 0.010 if axis != "yaw" else 0.006
+            result["ff"] -= 0.010
+        if issue in {"propwash", "bounceback"} and axis != "yaw":
             result["d"] -= 0.004
 
     for key in result:
         result[key] = float(np.clip(result[key], -0.06, 0.06))
-
     if axis == "yaw":
         result["d"] = 0.0
-
     return result
 
 
-def _issue_label(issue: str, goal: str) -> str:
-    labels = {
-        "clean": "Clean tune",
-        "borderline_clean": "Mostly clean",
-        "high_frequency_noise": "High-frequency noise",
-        "yaw_noise_or_roughness": "Yaw roughness / noise",
-        "mid_frequency_vibration": "Mid-frequency vibration",
-        "propwash_or_bounceback": "Propwash / bounceback",
-        "yaw_throttle_roughness": "Yaw throttle roughness",
-        "low_frequency_oscillation": "Loose / bouncing",
-        "drift_or_weak_hold": "Weak hold / drift",
-        "poor_tracking": "Soft tracking",
-        "slow_response": "Slow stick response",
-    }
-    return labels.get(issue, "Unknown")
-
-
-def _pid_moves_for_issue(axis: str, issue: str, goal: str) -> List[str]:
-    if issue == "clean":
-        if goal == "locked_in":
-            return [
-                "No repair needed.",
-                "Optional feel change only: add a tiny amount of P/FF if you want more locked-in response.",
-                "Do not change D unless propwash or bounceback is actually present.",
-            ]
-        if goal == "floaty":
-            return [
-                "No repair needed.",
-                "Optional feel change only: lower P/FF slightly if you want softer cinematic movement.",
-                "Do not change D unless propwash or bounceback is actually present.",
-            ]
-        return [
-            "No PID change needed.",
-            "Only change something if the flight feel gives you a reason.",
-            "For Efficient/Smooth, leave it alone.",
-        ]
-
-    if issue == "borderline_clean":
-        return [
-            "No required PID repair from this log.",
-            "If you want more locked-in feel, try a tiny P/FF increase.",
-            "If you want smoother cinematic feel, try a tiny P/FF decrease.",
-            "Do not change D unless the flight shows propwash, bounceback, or noise.",
-        ]
-
-    if issue == "high_frequency_noise":
-        return [
-            "D: lower or do not raise it. D amplifies high-frequency gyro/residual noise and can heat motors.",
-            "P: lower slightly only if the quad sounds harsh, twitchy, or nervous.",
-            "I: leave alone unless the quad is drifting.",
-            "FF: leave alone unless stick response is the issue.",
-            "Fix mechanical/filtering causes first: props, motors, frame screws, stack mounting, RPM/dynamic filtering.",
-        ]
-
-    if issue == "yaw_noise_or_roughness":
-        return [
-            "D: keep yaw D at 0.",
-            "P: lower yaw P slightly if yaw looks rough in fast forward flight or punch-outs.",
-            "I: leave yaw I alone unless heading hold is weak.",
-            "FF: leave alone unless yaw stick response feels delayed.",
-            "Check mechanical noise first before tuning around it.",
-        ]
-
-    if issue == "mid_frequency_vibration":
-        return [
-            "P: lower slightly to calm roughness.",
-            "D: lower slightly if motors sound rough or come down warm.",
-            "I: leave alone unless attitude hold is weak.",
-            "FF: leave alone unless stick response is the actual complaint.",
-            "Also check props, motors, frame screws, and stack mounting before blaming only PID.",
-        ]
-
-    if issue == "propwash_or_bounceback":
-        return [
-            "D: raise slightly first. This is the main Betaflight-style fix for propwash and bounceback.",
-            "P: do not raise P yet. If the bounce is slow or over-correcting, lower P slightly.",
-            "I: leave alone unless the quad drifts or loses attitude on throttle changes.",
-            "FF: leave alone unless stick response itself feels lazy.",
-            "After raising D, do a short test flight and check motor temperature.",
-        ]
-
-    if issue == "yaw_throttle_roughness":
-        return [
-            "D: keep yaw D at 0.",
-            "P: lower slightly if yaw shakes on punch-outs or fast forward flight.",
-            "I: raise slightly only if yaw will not hold heading through throttle changes.",
-            "FF: raise only if yaw stick response feels delayed.",
-            "Yaw is tuned mainly with P/I/FF, not D.",
-        ]
-
-    if issue == "low_frequency_oscillation":
-        if axis == "yaw":
-            return [
-                "P: lower yaw P slightly first.",
-                "D: keep yaw D at 0.",
-                "I: leave alone unless yaw drifts or will not hold heading.",
-                "FF: leave alone unless yaw stick feel is delayed.",
-            ]
-        return [
-            "P: lower slightly first. Slow bounce usually means the loop is over-correcting.",
-            "D: leave alone at first. Add D only later if bounceback/propwash remains.",
-            "I: leave alone unless the quad drifts or will not hold attitude.",
-            "FF: leave alone unless stick response is delayed.",
-        ]
-
-    if issue == "drift_or_weak_hold":
-        return [
-            "I: raise slightly. I helps the quad hold attitude against wind, CG bias, and throttle changes.",
-            "P: leave mostly alone unless the quad also feels soft or sloppy.",
-            "D: leave alone unless bounceback or propwash appears.",
-            "FF: leave alone unless stick response feels delayed.",
-        ]
-
-    if issue == "poor_tracking":
-        return [
-            "P: raise slightly if the quad feels soft and does not follow the sticks well.",
-            "FF: raise slightly if stick response feels delayed but the quad is otherwise clean.",
-            "D: leave alone unless bounceback or propwash appears.",
-            "I: leave alone unless it will not hold attitude through throttle changes.",
-        ]
-
-    if issue == "slow_response":
-        return [
-            "FF: raise slightly first. FF improves stick response without making P do all the work.",
-            "P: raise slightly only if it still feels soft after FF.",
-            "D: leave alone unless bounceback or propwash is showing up.",
-            "I: leave alone unless attitude hold is weak.",
-        ]
-
-    return ["No clear issue detected. Retake a cleaner log before changing PID values."]
-
-
-def _recommendation_text(axis: str, issue: str, goal: str, valid_for_pid: bool) -> str:
-    axis_label = axis.upper()
-
-    if not valid_for_pid:
-        return f"{axis_label}: data is not clean enough to trust PID advice yet. Retake a cleaner 30–120 second log."
+def _moves(issue: str, axis: str, goal: str) -> List[str]:
+    yaw_note = "D: keep yaw D at 0. Tune yaw with P/I/FF only."
 
     if issue == "clean":
         if goal == "locked_in":
-            return f"{axis_label}: clean tune. No repair needed; only add tiny P/FF if you want more locked-in feel."
+            return ["No fix required.", "Optional: raise P/FF very slightly only if you want sharper stick connection.", "Do not change D just because the log is clean."]
         if goal == "floaty":
-            return f"{axis_label}: clean tune. No repair needed; only lower tiny P/FF if you want softer cinematic feel."
-        return f"{axis_label}: clean tune. No PID change needed."
+            return ["No fix required.", "Optional: lower P/FF very slightly only if you want smoother cinematic movement.", "Do not lower too far or it may feel sloppy."]
+        return ["No PID change needed.", "Only change something if the flight feel gives you a reason.", "For Efficient/Smooth, leave it alone."]
 
-    if issue == "borderline_clean":
-        return f"{axis_label}: mostly clean. No required repair; make only small feel-based changes if the quad does not match your goal."
+    if issue == "propwash":
+        if axis == "yaw":
+            return ["P: lower slightly only if yaw shakes during punch-outs or fast forward flight.", "I: raise slightly only if yaw will not hold heading through throttle changes.", yaw_note]
+        return ["D: raise slightly for damping. This is the main propwash fix.", "P: do not raise P first; lower slightly only if it is over-correcting.", "I/FF: leave alone unless hold or stick response is also wrong.", "Check motor temperature after any D increase."]
+
+    if issue == "bounceback":
+        if axis == "yaw":
+            return ["P: lower slightly if yaw bounces back after stick release.", "FF: leave alone unless yaw feels delayed.", yaw_note]
+        return ["D: raise slightly to damp the stop.", "P: lower slightly if the bounce looks like overshoot.", "FF: leave alone unless stick response feels delayed.", "Check motor temperature after any D increase."]
 
     if issue == "high_frequency_noise":
-        return f"{axis_label}: high-frequency noise detected. Do not raise D. Check mechanical/filter noise first; reduce D/P only if it sounds harsh or motors warm up."
-
-    if issue == "yaw_noise_or_roughness":
-        return f"{axis_label}: yaw roughness/noise detected. Keep yaw D at 0; reduce yaw P slightly only if flight footage or punch-outs confirm yaw shake."
+        return ["D: lower or do not raise. D-term amplifies noise and can heat motors.", "Mechanical/filter check: props, motors, frame, stack, RPM/dynamic notch filtering.", "P: lower slightly only if the quad sounds harsh or twitchy.", yaw_note if axis == "yaw" else "Do not chase propwash by raising D until noise is clean."]
 
     if issue == "mid_frequency_vibration":
-        return f"{axis_label}: mid-frequency vibration detected. Check props/motors/frame first; if the build is clean, soften P/D slightly."
+        return ["Mechanical check first: props, motors, frame screws, stack mounting.", "P/D: soften slightly if the build is clean but vibration remains.", "I/FF: leave alone unless hold or stick feel is the real complaint.", yaw_note if axis == "yaw" else "Do not raise D into vibration."]
 
-    if issue == "propwash_or_bounceback":
-        return f"{axis_label}: propwash/bounceback detected. Add a small amount of D or D Max style damping; do not raise P first. Check motor heat."
-
-    if issue == "yaw_throttle_roughness":
-        return f"{axis_label}: yaw roughness during throttle/high-load moments. Keep yaw D at 0; adjust yaw P/I only if flight feel confirms it."
+    if issue == "high_throttle_oscillation":
+        return ["P: lower slightly if roughness appears on punch-outs/high throttle.", "Consider TPA-style behavior if it only happens at high throttle.", "D: lower slightly only if motors are warm/noisy.", yaw_note if axis == "yaw" else "Retest with a controlled punch-out."]
 
     if issue == "low_frequency_oscillation":
         if axis == "yaw":
-            return f"{axis_label}: slow yaw bounce detected. Lower yaw P slightly first. Keep yaw D at 0."
-        return f"{axis_label}: slow bounce detected. Lower P slightly first. Leave D alone unless propwash/bounceback remains."
+            return ["P: lower slightly. Slow yaw bounce usually means yaw P is pushing too hard.", "I: leave alone unless yaw will not hold heading.", yaw_note]
+        return ["P: lower slightly first. Slow bounce usually means over-correction.", "D: leave alone at first. Add D only later if bounceback/propwash remains.", "I/FF: leave alone unless hold or stick response is wrong."]
 
     if issue == "drift_or_weak_hold":
-        return f"{axis_label}: weak hold detected. Raise I slightly because I helps attitude hold through wind, CG bias, and throttle changes."
+        return ["I: raise slightly. I-term helps hold attitude against throttle changes, wind, and CG bias.", "P: leave mostly alone unless it also feels soft.", "D/FF: leave alone unless bounceback or stick delay appears."]
 
-    if issue == "poor_tracking":
-        return f"{axis_label}: soft tracking detected. Raise P slightly for tighter tracking, or FF if the main complaint is delayed stick response."
+    if issue in {"poor_tracking", "soft_tracking_error"}:
+        return ["P: raise slightly if the quad feels soft and does not follow sticks.", "FF: raise slightly if the response feels delayed but otherwise clean.", "D: leave alone unless bounceback/propwash appears.", "I: leave alone unless it will not hold attitude."]
 
     if issue == "slow_response":
-        return f"{axis_label}: slow stick response detected. Raise FF first; add P only if it still feels soft."
+        return ["FF: raise slightly first. FF improves stick response without making P do all the work.", "P: raise slightly only if it still feels soft after FF.", "D/I: leave alone unless bounceback or weak hold appears."]
 
-    return f"{axis_label}: no clear PID recommendation."
+    return ["No clear PID move. Retake the log if flight feel disagrees."]
 
 
-def _warnings_for_goal(goal: str) -> List[str]:
-    warnings = [
+def _recommendation(axis: str, issue: str, goal: str) -> str:
+    label = axis.upper()
+    if issue == "clean":
+        if goal == "locked_in":
+            return f"{label}: clean tune. No fix needed; optional tiny P/FF increase only for more locked-in feel."
+        if goal == "floaty":
+            return f"{label}: clean tune. No fix needed; optional tiny P/FF decrease only for smoother cinematic feel."
+        return f"{label}: clean tune. No PID change needed."
+    if issue == "propwash":
+        return f"{label}: propwash detected. Add damping carefully; on yaw keep D at 0."
+    if issue == "bounceback":
+        return f"{label}: bounceback/overshoot detected. Add damping carefully; lower P slightly if it is over-correcting."
+    if issue == "high_frequency_noise":
+        return f"{label}: high-frequency noise detected. Do not raise D; clean noise first and reduce D/P if needed."
+    if issue == "mid_frequency_vibration":
+        return f"{label}: mid-frequency vibration detected. Check mechanical noise first; then soften P/D if needed."
+    if issue == "high_throttle_oscillation":
+        return f"{label}: high-throttle oscillation detected. Lower P slightly and consider TPA-style behavior if it only happens on punch-outs."
+    if issue == "low_frequency_oscillation":
+        return f"{label}: slow bounce detected. Lower P slightly first. Leave D alone unless propwash/bounceback remains."
+    if issue == "drift_or_weak_hold":
+        return f"{label}: weak hold detected. Raise I slightly if it drifts or loses attitude during throttle changes."
+    if issue in {"poor_tracking", "soft_tracking_error"}:
+        return f"{label}: soft tracking detected. Raise P for authority or FF if the delay is stick-response related."
+    if issue == "slow_response":
+        return f"{label}: slow response detected. Raise FF first; add P only if it still feels soft."
+    return f"{label}: no clear PID change recommended."
+
+
+def _severity(issue: str, stats: AxisStats) -> str:
+    if issue == "clean":
+        return "good"
+    if issue in {"high_frequency_noise", "high_throttle_oscillation"} or stats.error_ratio > 0.18:
+        return "warning"
+    if issue in {"propwash", "bounceback", "mid_frequency_vibration"}:
+        return "attention"
+    return "watch"
+
+
+def _summary_from_axes(axes: Dict[str, Dict[str, Any]], goal: str) -> str:
+    problems = [f"{axis.upper()}: {payload['issue_label']}" for axis, payload in axes.items() if payload["issue"] != "clean"]
+    if not problems:
+        if goal == "locked_in":
+            return "Clean tune detected. No fix needed; optional small P/FF increase only for a more locked-in feel."
+        if goal == "floaty":
+            return "Clean tune detected. No fix needed; optional small P/FF decrease only for smoother cinematic feel."
+        return "Clean tune detected. No PID change needed."
+    return "Analysis complete. " + " | ".join(problems)
+
+
+def _common_flags(issue: str, stats: AxisStats) -> List[str]:
+    flags: List[str] = []
+    if issue in {"high_frequency_noise", "mid_frequency_vibration"}:
+        flags.append("Inspect props/motors/frame/stack before PID-chasing.")
+    if issue == "high_throttle_oscillation":
+        flags.append("High-throttle-only roughness often points to TPA/filter/noise interaction.")
+    if issue in {"propwash", "bounceback"}:
+        flags.append("Retest with dives, split-S, hard turns, and throttle chops.")
+    if stats.gyro_high_ratio > 0.40:
+        flags.append("Gyro itself has high-frequency content; check filtering/mechanical noise.")
+    return flags
+
+
+def detect_oscillation(df: pd.DataFrame, drone_size: str = "7", tuning_goal: str = "efficient") -> Dict[str, Any]:
+    goal = normalize_goal(tuning_goal)
+
+    if df is None or df.empty or "time" not in df.columns:
+        return {
+            "status": "invalid",
+            "valid_for_pid": False,
+            "summary": "No usable time/gyro data found.",
+            "warnings": ["Upload a parsed Betaflight CSV or run it through the optimizer first."],
+            "global_actions": [],
+            "axes": {},
+            "recommendations": [],
+            "tuning_goal": goal,
+            "source_references": SOURCE_REFERENCES,
+            "common_problem_library": COMMON_PROBLEM_LIBRARY,
+        }
+
+    time = df["time"].to_numpy(dtype=float)
+    bands = DRONE_BANDS.get(str(drone_size), DRONE_BANDS["7"])
+    throttle = df["throttle"].to_numpy(dtype=float) if "throttle" in df.columns else None
+
+    axes: Dict[str, Dict[str, Any]] = {}
+    recommendations: List[Dict[str, Any]] = []
+    global_warnings = [
         "Recommendations are conservative percentage deltas, not final PID numbers.",
         "Retest after every change.",
+        "Check motor temperature after any D increase or filter reduction.",
     ]
-
-    if goal == "efficient":
-        warnings.append("Efficient tuning prioritizes smoothness, motor safety, and conservative changes.")
-    elif goal == "locked_in":
-        warnings.append("Locked-In tuning can increase heat, twitchiness, or overshoot if pushed too far.")
-    elif goal == "floaty":
-        warnings.append("Floaty tuning trades sharp response for smoother cinematic movement.")
-
-    return warnings
-
-
-def _global_actions(goal: str) -> List[str]:
-    actions = [
+    global_actions = [
         "Use one small change at a time, then retest.",
-        "If D goes up, do a short flight and check motor temperature.",
         "Fix mechanical noise before using PID to hide vibration.",
+        "For random-parts builds, verify props, motor KV, frame stiffness, ESC protocol, filtering, and battery health.",
+        "Use the CSV optimizer when logs are too large or have messy column names.",
     ]
 
-    if goal == "efficient":
-        actions.append("Efficient mode keeps changes conservative and heat-safe.")
-    elif goal == "locked_in":
-        actions.append("Locked-In mode allows tiny P/FF increases only when the log is clean enough.")
-    elif goal == "floaty":
-        actions.append("Floaty mode softens response only when the log is clean enough.")
+    valid_axis_count = 0
 
-    return actions
-
-
-def detect_oscillation(
-    df: pd.DataFrame,
-    drone_size: str = "7",
-    tuning_goal: str = "efficient",
-) -> Dict[str, Any]:
-    goal = _normalize_goal(tuning_goal)
-
-    if df is None or df.empty:
-        return {
-            "status": "invalid",
-            "valid_for_pid": False,
-            "summary": "No usable data.",
-            "warnings": ["Parsed log is empty."],
-            "global_actions": [],
-            "axes": {},
-            "recommendations": [],
-            "sample_rate_hz": None,
-            "duration_s": None,
-            "drone_size": str(drone_size),
-            "tuning_goal": goal,
-            "source_references": SOURCE_REFERENCES,
-        }
-
-    if "time" not in df.columns:
-        return {
-            "status": "invalid",
-            "valid_for_pid": False,
-            "summary": "Missing time column.",
-            "warnings": ["AeroTune requires real timestamps."],
-            "global_actions": [],
-            "axes": {},
-            "recommendations": [],
-            "sample_rate_hz": None,
-            "duration_s": None,
-            "drone_size": str(drone_size),
-            "tuning_goal": goal,
-            "source_references": SOURCE_REFERENCES,
-        }
-
-    time = np.asarray(df["time"], dtype=float)
-    if len(time) < 128:
-        return {
-            "status": "invalid",
-            "valid_for_pid": False,
-            "summary": "Not enough log samples.",
-            "warnings": ["Need at least 128 rows for usable analysis."],
-            "global_actions": [],
-            "axes": {},
-            "recommendations": [],
-            "sample_rate_hz": None,
-            "duration_s": None,
-            "drone_size": str(drone_size),
-            "tuning_goal": goal,
-            "source_references": SOURCE_REFERENCES,
-        }
-
-    dt = np.diff(time)
-    good_dt = dt[np.isfinite(dt) & (dt > 0)]
-    if len(good_dt) == 0:
-        return {
-            "status": "invalid",
-            "valid_for_pid": False,
-            "summary": "Time spacing is invalid.",
-            "warnings": ["Timestamps must be increasing and real."],
-            "global_actions": [],
-            "axes": {},
-            "recommendations": [],
-            "sample_rate_hz": None,
-            "duration_s": None,
-            "drone_size": str(drone_size),
-            "tuning_goal": goal,
-            "source_references": SOURCE_REFERENCES,
-        }
-
-    sample_rate_hz = float(1.0 / np.median(good_dt))
-    duration_s = float(time[-1] - time[0])
-    band_profile = DRONE_BANDS.get(str(drone_size), DRONE_BANDS["7"])
-
-    axes: Dict[str, Any] = {}
-    recommendations: List[Dict[str, Any]] = []
-
-    for axis_name, (gyro_col, setpoint_col) in AXIS_MAP.items():
+    for axis_name, (gyro_col, setpoint_col) in AXES.items():
         if gyro_col not in df.columns:
             continue
 
-        gyro = np.asarray(df[gyro_col], dtype=float)
-        setpoint = np.asarray(df[setpoint_col], dtype=float) if setpoint_col in df.columns else np.zeros_like(gyro)
-        throttle = np.asarray(df["throttle"], dtype=float) if "throttle" in df.columns else None
+        gyro = df[gyro_col].to_numpy(dtype=float)
+        setpoint = df[setpoint_col].to_numpy(dtype=float) if setpoint_col in df.columns else np.zeros_like(gyro)
 
-        stats = _compute_axis_stats(gyro, setpoint, sample_rate_hz, band_profile, throttle)
-        issue, confidence, confidence_reason = _classify_issue(axis_name, stats)
-        delta = _apply_goal_bias(_base_delta_for_issue(axis_name, issue), axis_name, issue, goal)
+        stats = _axis_stats(time, gyro, setpoint, throttle, bands)
+        issue, confidence, reason = _classify(axis_name, stats)
+        base_delta = _base_delta(axis_name, issue)
+        pid_delta = _apply_goal(axis_name, issue, base_delta, goal)
+        valid_for_pid = confidence >= 0.55
 
-        valid_for_pid = confidence >= 0.70
-        issue_label = _issue_label(issue, goal)
-        tuning_moves = _pid_moves_for_issue(axis_name, issue, goal)
-        recommendation_text = _recommendation_text(axis_name, issue, goal, valid_for_pid)
+        if valid_for_pid:
+            valid_axis_count += 1
 
-        axis_payload = {
+        payload = {
             "axis": axis_name,
             "axis_name": axis_name.upper(),
             "status": "ok",
             "issue": issue,
-            "issue_label": issue_label,
-            "propwash_detected": issue in {"propwash_or_bounceback", "yaw_throttle_roughness"},
+            "issue_label": ISSUE_LABELS.get(issue, issue),
+            "severity": _severity(issue, stats),
+            "propwash_detected": issue == "propwash",
             "confidence": round(confidence, 3),
-            "confidence_reason": confidence_reason,
+            "confidence_reason": reason,
             "valid_for_pid": valid_for_pid,
-            "pid_delta_pct": {
-                "p": round(delta["p"], 4),
-                "i": round(delta["i"], 4),
-                "d": round(delta["d"], 4),
-                "ff": round(delta["ff"], 4),
-            },
-            "recommendation_text": recommendation_text,
-            "tuning_moves": tuning_moves,
+            "pid_delta_pct": {k: round(v, 4) for k, v in pid_delta.items()},
+            "recommendation_text": _recommendation(axis_name, issue, goal),
+            "tuning_moves": _moves(issue, axis_name, goal),
+            "common_flags": _common_flags(issue, stats),
             "signal": {
-                "dominant_gyro_freq_hz": None if stats.dominant_gyro_freq_hz is None else round(stats.dominant_gyro_freq_hz, 2),
-                "dominant_error_freq_hz": None if stats.dominant_error_freq_hz is None else round(stats.dominant_error_freq_hz, 2),
-                "gyro_low_ratio": round(stats.gyro_low_ratio, 4),
-                "gyro_mid_ratio": round(stats.gyro_mid_ratio, 4),
+                "dominant_freq_hz": None if stats.dominant_freq_hz is None else round(stats.dominant_freq_hz, 2),
+                "low_ratio": round(stats.low_ratio, 4),
+                "mid_ratio": round(stats.mid_ratio, 4),
+                "high_ratio": round(stats.high_ratio, 4),
+                "ultra_ratio": round(stats.ultra_ratio, 4),
+                "propwash_ratio": round(stats.propwash_ratio, 4),
                 "gyro_high_ratio": round(stats.gyro_high_ratio, 4),
-                "residual_low_ratio": round(stats.residual_low_ratio, 4),
-                "residual_mid_ratio": round(stats.residual_mid_ratio, 4),
-                "residual_high_ratio": round(stats.residual_high_ratio, 4),
-                "residual_ultra_ratio": round(stats.residual_ultra_ratio, 4),
-                "residual_noise_ratio": round(stats.residual_noise_ratio, 4),
                 "gyro_rms": round(stats.gyro_rms, 4),
                 "error_rms": round(stats.error_rms, 4),
                 "error_ratio": round(stats.error_ratio, 4),
-                "abs_error_p95": round(stats.abs_error_p95, 4),
                 "abs_error_p99": round(stats.abs_error_p99, 4),
                 "spike_ratio": round(stats.spike_ratio, 4),
-                "propwash_score": round(stats.propwash_score, 4),
-                "throttle_activity": round(stats.throttle_activity, 4),
                 "throttle_error_ratio": round(stats.throttle_error_ratio, 4),
                 "high_throttle_error_ratio": round(stats.high_throttle_error_ratio, 4),
                 "stop_overshoot_ratio": round(stats.stop_overshoot_ratio, 4),
@@ -828,60 +725,34 @@ def detect_oscillation(
                 "lag_ms": None if stats.lag_ms is None else round(stats.lag_ms, 2),
                 "setpoint_rms": round(stats.setpoint_rms, 4),
             },
-            "warnings": _warnings_for_goal(goal),
         }
 
-        axes[axis_name] = axis_payload
+        axes[axis_name] = payload
         recommendations.append({
             "axis": axis_name,
             "issue": issue,
-            "issue_label": issue_label,
-            "propwash_detected": axis_payload["propwash_detected"],
-            "confidence": axis_payload["confidence"],
-            "confidence_reason": confidence_reason,
-            "pid_delta_pct": axis_payload["pid_delta_pct"],
-            "recommendation_text": recommendation_text,
-            "tuning_moves": tuning_moves,
+            "issue_label": payload["issue_label"],
+            "severity": payload["severity"],
+            "propwash_detected": payload["propwash_detected"],
+            "confidence": payload["confidence"],
+            "confidence_reason": reason,
+            "pid_delta_pct": payload["pid_delta_pct"],
+            "recommendation_text": payload["recommendation_text"],
+            "tuning_moves": payload["tuning_moves"],
         })
 
-    if not axes:
-        return {
-            "status": "invalid",
-            "valid_for_pid": False,
-            "summary": "No usable gyro axes found.",
-            "warnings": ["Parser did not produce gyro_x / gyro_y / gyro_z columns."],
-            "global_actions": [],
-            "axes": {},
-            "recommendations": [],
-            "sample_rate_hz": round(sample_rate_hz, 2),
-            "duration_s": round(duration_s, 3),
-            "drone_size": str(drone_size),
-            "tuning_goal": goal,
-            "source_references": SOURCE_REFERENCES,
-        }
-
-    problem_parts = [
-        f"{payload['axis_name']}: {payload['issue_label']}"
-        for payload in axes.values()
-        if payload["issue"] not in {"clean", "borderline_clean"}
-    ]
-
-    if problem_parts:
-        summary = "Analysis complete. " + " | ".join(problem_parts)
-    else:
-        summary = "Analysis complete. Clean tune — no PID repair needed."
-
     return {
-        "status": "ok",
-        "valid_for_pid": any(axis["valid_for_pid"] for axis in axes.values()),
-        "summary": summary,
-        "warnings": _warnings_for_goal(goal),
-        "global_actions": _global_actions(goal),
+        "status": "ok" if axes else "invalid",
+        "valid_for_pid": valid_axis_count > 0,
+        "summary": _summary_from_axes(axes, goal) if axes else "No usable gyro axes found.",
+        "warnings": global_warnings,
+        "global_actions": global_actions,
         "axes": axes,
         "recommendations": recommendations,
-        "sample_rate_hz": round(sample_rate_hz, 2),
-        "duration_s": round(duration_s, 3),
+        "sample_rate_hz": round(float(1.0 / np.median(np.diff(time))), 2) if len(time) > 2 else None,
+        "duration_s": round(float(time[-1] - time[0]), 3) if len(time) > 1 else None,
         "drone_size": str(drone_size),
         "tuning_goal": goal,
+        "common_problem_library": COMMON_PROBLEM_LIBRARY,
         "source_references": SOURCE_REFERENCES,
     }
