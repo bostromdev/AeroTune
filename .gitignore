@@ -1,9 +1,9 @@
-*.save
-__pycache__/
+!uploads/.gitkeep
 *.pyc
+*.save
 .DS_Store
 .env
-uploads/*
-!uploads/.gitkeep
+__pycache__/
 sample_logs/*.csv
 static/index_original.html
+uploads/*
