@@ -2,1137 +2,174 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>AeroTune</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <title>AeroTune</title>
   <style>
-    :root {
-      --bg-1: #eef6ff;
-      --bg-2: #f8fbff;
-      --card: rgba(255, 255, 255, 0.82);
-      --card-strong: rgba(255, 255, 255, 0.92);
-      --border: rgba(100, 140, 190, 0.18);
-      --text: #16314f;
-      --muted: #5c7592;
-      --accent: #2c7df0;
-      --accent-2: #39b8ff;
-      --good: #1f9d5a;
-      --warn: #d28a00;
-      --bad: #d64545;
-      --shadow: 0 18px 50px rgba(38, 90, 165, 0.12);
-      --radius: 20px;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: Inter, Arial, sans-serif;
-      color: var(--text);
-      background:
-        radial-gradient(circle at top left, rgba(90, 170, 255, 0.20), transparent 30%),
-        radial-gradient(circle at top right, rgba(0, 210, 255, 0.16), transparent 28%),
-        linear-gradient(180deg, var(--bg-1), var(--bg-2));
-      min-height: 100vh;
-    }
-
-    .wrap {
-      max-width: 1220px;
-      margin: 0 auto;
-      padding: 28px 18px 40px;
-    }
-
-    .hero {
-      background: linear-gradient(135deg, rgba(44,125,240,0.92), rgba(57,184,255,0.86));
-      color: white;
-      border-radius: 28px;
-      padding: 26px;
-      box-shadow: 0 18px 60px rgba(32, 110, 210, 0.22);
-      margin-bottom: 20px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .hero::after {
-      content: "";
-      position: absolute;
-      right: -80px;
-      top: -80px;
-      width: 260px;
-      height: 260px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.14);
-      filter: blur(6px);
-    }
-
-    .hero h1 {
-      margin: 0 0 8px;
-      font-size: 2.2rem;
-      letter-spacing: -0.02em;
-    }
-
-    .hero p {
-      margin: 0;
-      max-width: 820px;
-      color: rgba(255,255,255,0.92);
-      line-height: 1.5;
-    }
-
-    .card {
-      background: var(--card);
-      backdrop-filter: blur(10px);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px;
-      box-shadow: var(--shadow);
-      margin-bottom: 18px;
-    }
-
-    .card h2, .card h3, .card h4 {
-      margin-top: 0;
-      margin-bottom: 10px;
-    }
-
-    .grid { display: grid; gap: 16px; }
-    .grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-    .grid-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-    .axis-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-
-    label {
-      display: block;
-      font-weight: 700;
-      margin-bottom: 8px;
-      color: var(--text);
-    }
-
-    input[type="file"], input[type="number"], select, button, textarea {
-      width: 100%;
-      border-radius: 14px;
-      border: 1px solid rgba(91, 132, 182, 0.22);
-      background: rgba(255,255,255,0.95);
-      color: var(--text);
-      padding: 12px 14px;
-      font-size: 0.98rem;
-      transition: 0.18s ease;
-    }
-
-    input[type="file"]:focus, input[type="number"]:focus, select:focus, textarea:focus {
-      outline: none;
-      border-color: rgba(44, 125, 240, 0.48);
-      box-shadow: 0 0 0 4px rgba(44, 125, 240, 0.10);
-    }
-
-    button {
-      cursor: pointer;
-      background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      color: white;
-      font-weight: 800;
-      border: none;
-      box-shadow: 0 10px 24px rgba(44, 125, 240, 0.25);
-    }
-
-    button:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 14px 28px rgba(44, 125, 240, 0.28);
-    }
-
-    .status {
-      margin-top: 14px;
-      font-weight: 800;
-      padding: 12px 14px;
-      border-radius: 14px;
-      background: rgba(255,255,255,0.72);
-      border: 1px solid rgba(92, 117, 146, 0.16);
-    }
-
-    .good { color: var(--good); }
-    .warn { color: var(--warn); }
-    .bad { color: var(--bad); }
-
-    .row {
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 8px 0;
-      border-bottom: 1px solid rgba(92, 117, 146, 0.14);
-    }
-
-    .row:last-child { border-bottom: none; }
-
-    .metric-grid {
-      display: grid;
-      gap: 14px;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      margin-top: 10px;
-    }
-
-    .metric-box {
-      background: var(--card-strong);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 14px;
-    }
-
-    .metric-label {
-      font-size: 0.84rem;
-      color: var(--muted);
-      font-weight: 700;
-      margin-bottom: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-    }
-
-    .metric-value {
-      font-size: 1.08rem;
-      font-weight: 800;
-      color: var(--text);
-    }
-
-    .pill-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin: 8px 0 12px;
-    }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      padding: 6px 12px;
-      border-radius: 999px;
-      font-size: 0.88rem;
-      font-weight: 800;
-      background: rgba(44, 125, 240, 0.08);
-      color: var(--text);
-      border: 1px solid rgba(44, 125, 240, 0.12);
-    }
-
-    .pill.good {
-      background: rgba(31, 157, 90, 0.10);
-      border-color: rgba(31, 157, 90, 0.16);
-      color: var(--good);
-    }
-
-    .pill.warn {
-      background: rgba(210, 138, 0, 0.10);
-      border-color: rgba(210, 138, 0, 0.16);
-      color: var(--warn);
-    }
-
-    .axis-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 22px;
-      padding: 18px;
-      box-shadow: var(--shadow);
-    }
-
-    .axis-card h3 {
-      margin-bottom: 8px;
-      font-size: 1.35rem;
-    }
-
-    .section-title {
-      margin-top: 16px;
-      margin-bottom: 10px;
-      font-size: 0.95rem;
-      font-weight: 900;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-
-    .soft-note, .warning-banner {
-      border-radius: 16px;
-      padding: 12px 14px;
-      margin-top: 12px;
-      font-weight: 700;
-      line-height: 1.45;
-    }
-
-    .soft-note {
-      background: rgba(44, 125, 240, 0.07);
-      border: 1px solid rgba(44, 125, 240, 0.12);
-      color: var(--text);
-    }
-
-
-    .quality-note {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 12px;
-      align-items: start;
-      background: linear-gradient(135deg, rgba(44, 125, 240, 0.10), rgba(57, 184, 255, 0.08));
-      border: 1px solid rgba(44, 125, 240, 0.18);
-      border-radius: 18px;
-      padding: 14px 16px;
-      margin: 12px 0 18px;
-      box-shadow: 0 10px 26px rgba(44, 125, 240, 0.08);
-    }
-
-    .quality-icon {
-      width: 36px;
-      height: 36px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 12px;
-      background: rgba(44, 125, 240, 0.12);
-      font-size: 1.25rem;
-      flex: 0 0 auto;
-    }
-
-    .quality-note strong {
-      display: block;
-      margin-bottom: 4px;
-      font-size: 0.98rem;
-    }
-
-    .quality-note span {
-      color: var(--muted);
-      font-size: 0.93rem;
-      line-height: 1.45;
-    }
-
-    .quality-bar {
-      height: 12px;
-      border-radius: 999px;
-      background: rgba(92, 117, 146, 0.16);
-      overflow: hidden;
-      margin-top: 10px;
-      border: 1px solid rgba(92, 117, 146, 0.14);
-    }
-
-    .quality-bar-fill {
-      height: 100%;
-      width: 0%;
-      border-radius: 999px;
-      background: linear-gradient(90deg, var(--bad), var(--warn), var(--good));
-      transition: width 0.35s ease;
-    }
-
-    .hero-badges {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 16px;
-      position: relative;
-      z-index: 1;
-    }
-
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 7px 11px;
-      border-radius: 999px;
-      font-size: 0.84rem;
-      font-weight: 800;
-      color: rgba(255,255,255,0.94);
-      background: rgba(255,255,255,0.14);
-      border: 1px solid rgba(255,255,255,0.20);
-      backdrop-filter: blur(6px);
-    }
-
-    .input-card {
-      background: rgba(255,255,255,0.54);
-      border: 1px solid rgba(91, 132, 182, 0.14);
-      border-radius: 18px;
-      padding: 14px;
-    }
-
-    .mini-help {
-      margin-top: 7px;
-      font-size: 0.84rem;
-      color: var(--muted);
-      line-height: 1.35;
-    }
-
-    .result-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 5px 10px;
-      border-radius: 999px;
-      background: rgba(22, 49, 79, 0.06);
-      color: var(--muted);
-      font-size: 0.82rem;
-      font-weight: 800;
-      margin-top: 8px;
-    }
-
-    .metric-value.big {
-      font-size: 1.35rem;
-      letter-spacing: -0.02em;
-    }
-
-    .warning-banner {
-      background: rgba(210, 138, 0, 0.10);
-      border: 1px solid rgba(210, 138, 0, 0.20);
-      color: #9a6500;
-    }
-
-    ul { margin: 10px 0 0; padding-left: 18px; }
-    li { margin-bottom: 7px; color: var(--text); }
-
-    textarea {
-      min-height: 260px;
-      resize: vertical;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    }
-
-    canvas {
-      background: rgba(255,255,255,0.88);
-      border-radius: 16px;
-      padding: 10px;
-      border: 1px solid rgba(91, 132, 182, 0.12);
-    }
-
-    .tiny {
-      color: var(--muted);
-      font-size: 0.9rem;
-      line-height: 1.45;
-    }
-
-    .hidden { display: none; }
-
-
-    .hero-product {
-      padding: 34px;
-      isolation: isolate;
-    }
-
-    .hero-product::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background:
-        linear-gradient(120deg, rgba(255,255,255,0.18), transparent 42%),
-        radial-gradient(circle at 82% 22%, rgba(255,255,255,0.26), transparent 24%);
-      z-index: 0;
-      pointer-events: none;
-    }
-
-    .hero-product > * {
-      position: relative;
-      z-index: 1;
-    }
-
-    .hero-topline {
-      display: inline-flex;
-      align-items: center;
-      padding: 7px 12px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.16);
-      border: 1px solid rgba(255,255,255,0.24);
-      font-size: 0.78rem;
-      font-weight: 900;
-      letter-spacing: 0.08em;
-      margin-bottom: 12px;
-      color: rgba(255,255,255,0.94);
-    }
-
-    .hero-product h1 {
-      font-size: clamp(2.2rem, 5vw, 4.4rem);
-      line-height: 0.95;
-      margin-bottom: 14px;
-      text-shadow: 0 10px 32px rgba(0, 54, 130, 0.20);
-    }
-
-    .hero-lead {
-      font-size: clamp(1rem, 2vw, 1.22rem);
-      max-width: 760px !important;
-      font-weight: 700;
-    }
-
-    .hero-stat-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 12px;
-      margin: 22px 0 8px;
-      max-width: 820px;
-    }
-
-    .hero-stat {
-      background: rgba(255,255,255,0.14);
-      border: 1px solid rgba(255,255,255,0.20);
-      border-radius: 18px;
-      padding: 14px;
-      backdrop-filter: blur(8px);
-    }
-
-    .hero-stat-value {
-      font-size: 1.08rem;
-      font-weight: 950;
-      color: white;
-      letter-spacing: -0.02em;
-    }
-
-    .hero-stat-label {
-      margin-top: 4px;
-      font-size: 0.82rem;
-      color: rgba(255,255,255,0.82);
-      font-weight: 800;
-    }
-
-    .section-kicker {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: rgba(44, 125, 240, 0.08);
-      color: var(--accent);
-      font-size: 0.78rem;
-      font-weight: 950;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      margin-bottom: 10px;
-    }
-
-    .focus-strip {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 12px;
-      margin: 0 0 18px;
-    }
-
-    .focus-card {
-      background: var(--card-strong);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 15px;
-      box-shadow: 0 12px 30px rgba(38, 90, 165, 0.08);
-    }
-
-    .focus-card .emoji {
-      font-size: 1.45rem;
-      margin-bottom: 8px;
-    }
-
-    .focus-card strong {
-      display: block;
-      font-size: 0.98rem;
-      margin-bottom: 5px;
-    }
-
-    .focus-card span {
-      color: var(--muted);
-      font-size: 0.88rem;
-      line-height: 1.38;
-      font-weight: 650;
-    }
-
-    .callout-strong {
-      background: linear-gradient(135deg, rgba(31,157,90,0.12), rgba(44,125,240,0.08));
-      border: 1px solid rgba(31,157,90,0.18);
-      border-radius: 18px;
-      padding: 14px 16px;
-      font-weight: 850;
-      margin: 12px 0 18px;
-    }
-
-    .callout-strong span {
-      color: var(--muted);
-      font-weight: 700;
-    }
-
-    @media (max-width: 700px) {
-      .hero-product { padding: 26px 20px; }
-      .hero-stat-grid { grid-template-columns: 1fr; }
-    }
-
-    @media (max-width: 700px) {
-      .hero h1 { font-size: 1.8rem; }
-      .wrap { padding: 18px 12px 30px; }
-    }
+    body { margin: 0; font-family: Arial, sans-serif; background: #081020; color: #edf4ff; }
+    main { max-width: 1100px; margin: 0 auto; padding: 28px; }
+    .card { background: #111b33; border: 1px solid #26395f; border-radius: 18px; padding: 20px; margin: 16px 0; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    label { display: block; margin: 12px 0 6px; color: #bfd0ff; }
+    input, select, button { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 10px; border: 1px solid #324a7a; background: #0b1428; color: #edf4ff; }
+    button { margin-top: 16px; background: #4b7cff; border: 0; font-weight: 700; cursor: pointer; }
+    .axis { background: #0b1428; border: 1px solid #26395f; border-radius: 16px; padding: 16px; }
+    .badge { display: inline-block; border-radius: 999px; padding: 5px 10px; background: #26395f; color: #cfe0ff; font-size: 13px; }
+    .warn { color: #ffd38a; }
+    .move { font-weight: 700; font-size: 17px; }
+    .clean { color: #a9ffca; font-weight: 700; }
+    pre { white-space: pre-wrap; background: #050914; border-radius: 12px; padding: 14px; overflow: auto; }
+    @media (max-width: 850px) { .grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="hero hero-product">
-      <div class="hero-topline">FPV BLACKBOX ANALYSIS • PID TUNING ASSISTANT</div>
-      <h1>⚡ AeroTune</h1>
-      <p class="hero-lead">
-        Upload a Betaflight CSV. Pick the feel you want. Get simple FPV-feel explanations based on real flight data — not guesses.
-      </p>
-
-      <div class="hero-stat-grid">
-        <div class="hero-stat">
-          <div class="hero-stat-value">30–120s</div>
-          <div class="hero-stat-label">Best log window</div>
-        </div>
-        <div class="hero-stat">
-          <div class="hero-stat-value">Feel Notes</div>
-          <div class="hero-stat-label">Pilot-readable output</div>
-        </div>
-        <div class="hero-stat">
-          <div class="hero-stat-value">FFT + Tracking</div>
-          <div class="hero-stat-label">Signal analysis</div>
-        </div>
-      </div>
-
-      <div class="hero-badges">
-        <span class="hero-badge">📊 Blackbox CSV</span>
-        <span class="hero-badge">🧠 Betaflight logic</span>
-        <span class="hero-badge">🛡️ Log quality score</span>
-        <span class="hero-badge">🔥 Efficient / Locked-In / Floaty</span>
-      </div>
-    </div>
-
-
-    <div class="focus-strip">
-      <div class="focus-card">
-        <div class="emoji">🎯</div>
-        <strong>Pick your flight feel</strong>
-        <span>Efficient, Locked-In, or Floaty tuning behavior from the same uploaded log.</span>
-      </div>
-      <div class="focus-card">
-        <div class="emoji">📈</div>
-        <strong>See what the drone is doing</strong>
-        <span>Frequency, lag, tracking, error ratio, and axis-by-axis behavior.</span>
-      </div>
-      <div class="focus-card">
-        <div class="emoji">🛡️</div>
-        <strong>Reject weak logs</strong>
-        <span>Quality scoring helps prevent bad data from producing misleading PID advice.</span>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="section-kicker">Start here</div>
-      <h2>Upload & Tune Goal</h2>
-
-      <div class="warning-banner">
-        <strong>Demo Mode Notice:</strong><br><br>
-        AeroTune is currently running as a hosted demo. Full CSV upload and analysis are temporarily disabled online due to file size limits and performance constraints on free hosting platforms.<br><br>
-
-        Blackbox logs are often large, and handling them reliably 24/7 on a server would require dedicated infrastructure well beyond what free tiers provide. Rather than offer an unstable experience, AeroTune is currently designed to run locally for full functionality.<br><br>
-
-        <strong>Good news:</strong> Running locally is fast, easy, and gives you full access to log optimization and analysis without any restrictions.<br><br>
-
-        We are actively working on a scalable solution for online uploads and will bring full hosted functionality back as soon as it can be done reliably.
-      </div>
-
-      <div class="soft-note">
-        <strong>Run locally:</strong><br>
-        <code>git clone https://github.com/bostromdev/AeroTune.git</code><br>
-        <code>cd AeroTune</code><br>
-        <code>python3 -m pip install -r requirements.txt</code><br>
-        <code>uvicorn main:app --reload</code>
-      </div>
-
-
-      <div class="quality-note">
-        <div class="quality-icon">📡</div>
-        <div>
-          <strong>Best log quality = better PID advice</strong>
-          <span>Use a 30–120 second Blackbox CSV with varied throttle, turns, punch-outs, and normal flight movement. Hover-only, crash-only, or very short logs may produce weak results.</span>
-        </div>
-      </div>
-
-      <div class="grid grid-2">
-        <div class="input-card">
-          <label for="logFile">CSV Log File</label>
-          <input id="logFile" type="file" accept=".csv" />
-          <div class="mini-help">Export from Betaflight Blackbox Explorer as CSV.</div>
-        </div>
-
-        <div class="input-card">
-          <label for="droneSize">Drone Size</label>
-          <select id="droneSize">
-            <option value="7" selected>7 inch</option>
-            <option value="5">5 inch</option>
-          </select>
-          <div class="mini-help">Used to adjust frequency bands for large vs standard builds.</div>
-        </div>
-
-        <div class="input-card">
-          <label for="tuningMode">Tune Goal</label>
-          <select id="tuningMode">
-            <option value="efficient" selected>Efficient / Smooth</option>
-            <option value="locked_in">Locked-In / Responsive</option>
-            <option value="floaty">Floaty / Soft</option>
-          </select>
-          <div class="mini-help">Pick the flight feel you want before analysis.</div>
-        </div>
-
-        <div style="display:flex; align-items:end;">
-          <button id="analyzeButton" onclick="analyzeLog()">Analyze Log</button>
-        </div>
-      </div>
-
-      <div id="modeWarning" class="warning-banner hidden"></div>
-      <div class="soft-note">
-        <strong>Feel choices:</strong> Efficient = smooth and conservative. Locked-In = sharper response and stronger hold. Floaty = softer freestyle/cinematic feel.
-      </div>
-
-      <div class="callout-strong">
-        AeroTune does not guess final PID numbers. <span>It explains what the log suggests the quad feels like so pilots can test small changes safely.</span>
-      </div>
-      <div id="status" class="status">Waiting for upload.</div>
-    </div>
-
-    <div class="card">
-      <h2>Betaflight Source Basis</h2>
-      <div id="sourcesBox" class="soft-note">No analysis yet.</div>
-    </div>
-
-    <div class="card">
-      <h2>Summary</h2>
-      <div id="summaryBox">No analysis yet.</div>
-    </div>
-
-    <div class="card">
-      <h2>Pilot Tune Notes</h2>
-      <div id="axisContainer" class="axis-grid"></div>
-    </div>
-
-    <div class="card">
-      <h2>Copyable Pilot Notes</h2>
-      <textarea id="cliBox" readonly></textarea>
-    </div>
-
-    <div class="card">
-      <h2>Roll Gyro vs Setpoint</h2>
-      <canvas id="gyroChart"></canvas>
-    </div>
-
-    <div class="card">
-      <h2>Roll Frequency Spectrum</h2>
-      <canvas id="freqChart"></canvas>
-    </div>
-  </div>
-
-  <script>
-    let gyroChart = null;
-    let freqChart = null;
-
-    function setStatus(message, type = "") {
-      const el = document.getElementById("status");
-      el.textContent = message;
-      el.className = "status " + type;
-    }
-
-    function pctText(value) {
-      const n = Number(value || 0) * 100;
-      return `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
-    }
-
-    function safe(value, fallback = "N/A") {
-      if (value === null || value === undefined || value === "") return fallback;
-      return value;
-    }
-
-    function fixed(value, digits = 2, suffix = "") {
-      if (value === null || value === undefined || !Number.isFinite(Number(value))) return "N/A";
-      return Number(value).toFixed(digits) + suffix;
-    }
-
-    function prettyMode(mode) {
-      const map = {
-        efficient: "Efficient / Smooth",
-        locked_in: "Locked-In / Responsive",
-        floaty: "Floaty / Soft",
-        efficiency: "Efficient / Smooth",
-        efficiency_snappy: "Locked-In / Responsive",
-        efficiency_floaty: "Floaty / Soft",
-        snappy: "Locked-In / Responsive"
-      };
-      return map[mode] || mode;
-    }
-
-    function updateModeWarning() {
-      const mode = document.getElementById("tuningMode").value;
-      const box = document.getElementById("modeWarning");
-
-      if (mode === "efficient") {
-        box.textContent = "Efficient mode favors smooth control, lower stress, and conservative changes. It avoids chasing a twitchy feel and is safest for long-range or larger builds.";
-        box.classList.remove("hidden");
-      } else if (mode === "locked_in") {
-        box.textContent = "Locked-In mode favors sharper response and stronger attitude hold. Betaflight guidance: more P sharpens response, I improves hold, D adds damping, and FF improves stick response — but too much can cause oscillation, heat, or overshoot.";
-        box.classList.remove("hidden");
-      } else if (mode === "floaty") {
-        box.textContent = "Floaty mode favors a softer freestyle/cinematic feel. It should reduce twitchiness and avoid excessive FF/P, but may feel less precise or less efficient if overdone.";
-        box.classList.remove("hidden");
-      } else {
-        box.classList.add("hidden");
-        box.textContent = "";
-      }
-    }
-
-    function getCurrentPidInputs(axis) {
-      return {
-        p: parseFloat(document.getElementById(`${axis}P`)?.value),
-        i: parseFloat(document.getElementById(`${axis}I`)?.value),
-        d: parseFloat(document.getElementById(`${axis}D`)?.value),
-        ff: parseFloat(document.getElementById(`${axis}FF`)?.value)
-      };
-    }
-
-    function adjustedValue(current, delta) {
-      if (!Number.isFinite(current)) return null;
-      return current * (1 + Number(delta || 0));
-    }
-
-    function adjustedText(current, delta) {
-      const val = adjustedValue(current, delta);
-      if (val === null) return "Enter current value";
-      return val.toFixed(2);
-    }
-
-    async function analyzeLog() {
-      const fileInput = document.getElementById("logFile");
-      const droneSize = document.getElementById("droneSize").value;
-      const tuningMode = document.getElementById("tuningMode").value;
-
-      if (!fileInput.files.length) {
-        setStatus("Choose a CSV file first.", "bad");
-        return;
-      }
-
-      const selectedFile = fileInput.files[0];
-      const maxHostedUploadMb = 45;
-      const selectedSizeMb = selectedFile.size / (1024 * 1024);
-
-      if (selectedSizeMb > maxHostedUploadMb) {
-        setStatus(
-          `This CSV is ${selectedSizeMb.toFixed(1)} MB. The hosted demo works best under ${maxHostedUploadMb} MB. Try a shorter 30–60s log, export fewer fields, or run AeroTune locally for larger logs.`,
-          "bad"
-        );
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-      formData.append("drone_size", droneSize);
-      formData.append("tuning_goal", tuningMode);
-
-      setStatus("Analyzing log...", "warn");
-      updateModeWarning();
-
-      try {
-        const res = await fetch("/upload-log", {
-          method: "POST",
-          body: formData
-        });
-
-        const rawText = await res.text();
-        let data = null;
-
-        try {
-          data = rawText ? JSON.parse(rawText) : {};
-        } catch (parseError) {
-          throw new Error(
-            "The server returned an HTML error page instead of analysis data. This usually means the upload was too large, the backend crashed, or Render was waking up. Try a smaller CSV first, then check Render logs if it repeats."
-          );
-        }
-
-        if (!res.ok) {
-          if (data.validation) {
-            renderValidationFailure(data.validation);
-          }
-          throw new Error(data.error || data.message || "Upload failed.");
-        }
-
-        renderSources(data.analysis);
-        renderSummary(data.analysis, tuningMode, data.validation);
-        renderAxes(data.analysis.axes || {}, tuningMode);
-        renderManualNotes(data.analysis, tuningMode);
-        await renderPlots();
-
-        if (data.analysis.valid_for_pid) {
-          setStatus("Analysis complete. Feel-based tuning notes are ready.", "good");
-        } else {
-          setStatus("Analysis complete. Diagnosis is available, but tuning advice is limited.", "warn");
-        }
-      } catch (err) {
-        setStatus(err.message || "Something went wrong.", "bad");
-      }
-    }
-
-
-    function renderValidationFailure(validation) {
-      const box = document.getElementById("summaryBox");
-      const issues = (validation.issues || []).map(i => `<li>${i}</li>`).join("");
-      const warnings = (validation.warnings || []).map(w => `<li>${w}</li>`).join("");
-      box.innerHTML = `
-        <div class="metric-grid">
-          ${renderValidation(validation)}
-        </div>
-        <div class="warning-banner" style="margin-top:14px;">
-          <strong>${validation.summary}</strong>
-        </div>
-        <div class="grid grid-2" style="margin-top:14px;">
-          <div><h4>Hard Issues</h4><ul>${issues || "<li>No hard issues listed.</li>"}</ul></div>
-          <div><h4>Warnings</h4><ul>${warnings || "<li>No warnings listed.</li>"}</ul></div>
-        </div>
-      `;
-    }
-
-    function renderSources(analysis) {
-      const box = document.getElementById("sourcesBox");
-      const refs = analysis.source_references || [];
-      if (!refs.length) {
-        box.innerHTML = "No source references returned.";
-        return;
-      }
-
-      box.innerHTML = `
-        <strong>Recommendation logic source:</strong>
-        <ul>${refs.map(r => `<li>${r}</li>`).join("")}</ul>
-        <div class="tiny" style="margin-top:10px;">
-          Source basis from the Betaflight PID Tuning Guide: P sharpens response but can oscillate if pushed too far; I improves attitude hold; D damps P/propwash but can add heat or mushiness; FF improves stick response but too much can cause twitchiness or overshoot.
-        </div>
-      `;
-    }
-
-    function renderValidation(validation) {
-      if (!validation) return `
-        <div class="metric-box">
-          <div class="metric-label">Log Quality</div>
-          <div class="metric-value warn">Not returned</div>
-          <div class="result-chip">Upload a valid CSV to score log quality</div>
-        </div>`;
-
-      const cls = validation.score >= 80 ? "good" : validation.score >= 70 ? "warn" : "bad";
-      const score = Math.max(0, Math.min(100, Number(validation.score || 0)));
-      return `
-        <div class="metric-box">
-          <div class="metric-label">Log Quality</div>
-          <div class="metric-value big ${cls}">${score}/100 · Grade ${validation.grade}</div>
-          <div class="quality-bar"><div class="quality-bar-fill" style="width:${score}%"></div></div>
-        </div>
-        <div class="metric-box">
-          <div class="metric-label">Validation</div>
-          <div class="metric-value ${validation.valid ? "good" : "bad"}">${validation.valid ? "Passed" : "Rejected"}</div>
-          <div class="result-chip">${validation.valid ? "Ready for analysis" : "Retake or export a cleaner log"}</div>
-        </div>`;
-    }
-
-    function renderSummary(analysis, tuningMode, validation) {
-      const box = document.getElementById("summaryBox");
-      const warnings = (analysis.warnings || []).map(w => `<li>${w}</li>`).join("");
-      const actions = (analysis.global_actions || []).map(a => `<li>${a}</li>`).join("");
-
-      const extraWarning = (
-tuningMode === "efficient" || tuningMode === "locked_in" || tuningMode === "floaty"
-      )
-        ? `<div class="warning-banner" style="margin-top:14px;">
-            ${document.getElementById("modeWarning").textContent}
-          </div>`
-        : "";
-
-      box.innerHTML = `
-        <div class="metric-grid">
-          <div class="metric-box">
-            <div class="metric-label">Status</div>
-            <div class="metric-value">${safe(analysis.status)}</div>
-          </div>
-          <div class="metric-box">
-            <div class="metric-label">Goal</div>
-            <div class="metric-value">${prettyMode(tuningMode)}</div>
-          </div>
-          <div class="metric-box">
-            <div class="metric-label">Drone Size</div>
-            <div class="metric-value">${safe(analysis.drone_size)} inch</div>
-          </div>
-          <div class="metric-box">
-            <div class="metric-label">Sample Rate</div>
-            <div class="metric-value">${fixed(analysis.sample_rate_hz, 2, " Hz")}</div>
-          </div>
-          <div class="metric-box">
-            <div class="metric-label">Duration</div>
-            <div class="metric-value">${fixed(analysis.duration_s, 3, " s")}</div>
-          </div>
-          <div class="metric-box">
-            <div class="metric-label">Tuning Notes</div>
-            <div class="metric-value ${analysis.valid_for_pid ? "good" : "warn"}">
-              ${analysis.valid_for_pid ? "Ready" : "Diagnosis Only"}
-            </div>
-          </div>
-          ${renderValidation(validation)}
-        </div>
-
-        <div class="soft-note" style="margin-top:14px;">
-          <strong>Summary:</strong> ${safe(analysis.summary)}
-        </div>
-
-        ${extraWarning}
-
-        <div class="grid grid-2" style="margin-top:14px;">
-          <div>
-            <h4>Warnings</h4>
-            <ul>${warnings || "<li>No global warnings.</li>"}</ul>
-          </div>
-          <div>
-            <h4>Actions</h4>
-            <ul>${actions || "<li>No global actions.</li>"}</ul>
-          </div>
-        </div>
-      `;
-    }
-
-    function renderAxes(axes, tuningMode) {
-      const container = document.getElementById("axisContainer");
-      container.innerHTML = "";
-
-      for (const key of ["roll", "pitch", "yaw"]) {
-        const axis = axes[key];
-        if (!axis) continue;
-
-        const actions = axis.actions || [];
-        const tuningMoves = axis.tuning_moves || [];
-        const warnings = axis.warnings || [];
-
-        const card = document.createElement("div");
-        card.className = "axis-card";
-
-        card.innerHTML = `
-          <h3>${axis.axis_name}</h3>
-
-          <div class="pill-row">
-            <div class="pill">${safe(axis.feel)}</div>
-            <div class="pill ${axis.valid_for_pid ? "good" : "warn"}">
-              ${axis.valid_for_pid ? "Pilot notes ready" : "Diagnosis only"}
-            </div>
-          </div>
-
-          <div class="section-title">Main Read</div>
-          <div class="soft-note">${safe(axis.recommendation_text)}</div>
-
-          <div class="section-title">What P / I / D / FF Should Do</div>
-          <ul>${tuningMoves.map(a => `<li>${a}</li>`).join("") || "<li>No PID move suggested from this log.</li>"}</ul>
-
-          <div class="section-title">Why It Feels This Way</div>
-          <ul>${actions.map(a => `<li>${a}</li>`).join("") || "<li>No action listed.</li>"}</ul>
-
-          <div class="section-title">Safety / Watchouts</div>
-          <ul>${warnings.map(w => `<li>${w}</li>`).join("") || "<li>Make one small change, fly again, and check motor heat.</li>"}</ul>
-        `;
-
-        container.appendChild(card);
-      }
-    }
-
-
-    function renderManualNotes(analysis, tuningMode) {
-      const lines = [];
-      lines.push("# AeroTune pilot tuning notes");
-      lines.push(`# selected_mode: ${prettyMode(tuningMode)}`);
-      lines.push(`# summary: ${analysis.summary}`);
-      lines.push("");
-
-      for (const key of ["roll", "pitch", "yaw"]) {
-        const axis = analysis.axes[key];
-        if (!axis) continue;
-
-        lines.push(`[${axis.axis_name}]`);
-        lines.push(`feel = ${axis.feel}`);
-        lines.push(`main_read = ${axis.recommendation_text}`);
-        lines.push("");
-        lines.push("what_pid_should_do:");
-        for (const item of (axis.tuning_moves || [])) {
-          lines.push(`- ${item}`);
-        }
-        lines.push("");
-        lines.push("why_it_feels_that_way:");
-        for (const item of (axis.actions || [])) {
-          lines.push(`- ${item}`);
-        }
-        lines.push("");
-      }
-
-      lines.push("Pilot reminder:");
-      lines.push("Make one small change at a time, then fly another clean 30–120 second log.");
-      lines.push("For propwash: D can help, but too much D heats motors and can make the quad feel mushy.");
-      lines.push("If motors get hot or the quad sounds rough, back off and check the build.");
-
-      document.getElementById("cliBox").value = lines.join("
-");
-    }
-
-
-    async function renderPlots() {
-      try {
-        const res = await fetch("/plot");
-        const rawText = await res.text();
-        if (!res.ok) return;
-
-        let data = null;
-        try {
-          data = rawText ? JSON.parse(rawText) : {};
-        } catch (parseError) {
-          console.warn("Plot endpoint returned non-JSON response.");
-          return;
-        }
-
-        if (gyroChart) gyroChart.destroy();
-        if (freqChart) freqChart.destroy();
-
-        gyroChart = new Chart(document.getElementById("gyroChart"), {
-          type: "line",
-          data: {
-            labels: data.time,
-            datasets: [
-              { label: "Gyro", data: data.gyro, borderWidth: 2, pointRadius: 0 },
-              { label: "Setpoint", data: data.setpoint, borderWidth: 2, pointRadius: 0 },
-              { label: "Smoothed", data: data.simulated, borderWidth: 2, pointRadius: 0 }
-            ]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            interaction: { mode: "index", intersect: false }
-          }
-        });
-
-        freqChart = new Chart(document.getElementById("freqChart"), {
-          type: "line",
-          data: {
-            labels: data.freqs,
-            datasets: [
-              { label: "Spectrum", data: data.magnitude, borderWidth: 2, pointRadius: 0 }
-            ]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            interaction: { mode: "index", intersect: false }
-          }
-        });
-      } catch (err) {
-        console.warn(err);
-      }
-    }
-
-    
-    function applyHostedDemoMode() {
-      const isLocal =
-        window.location.hostname === "127.0.0.1" ||
-        window.location.hostname === "localhost";
-
-      const button = document.getElementById("analyzeButton");
-
-      if (!button) return;
-
-      if (isLocal) {
-        button.disabled = false;
-        button.style.opacity = "1";
-        button.style.cursor = "pointer";
-        button.textContent = "Analyze Log";
-      } else {
-        button.disabled = true;
-        button.style.opacity = "0.65";
-        button.style.cursor = "not-allowed";
-        button.textContent = "Online Upload Disabled — Run Locally";
-      }
-    }
-
-    applyHostedDemoMode();
-
-    document.getElementById("tuningMode").addEventListener("change", updateModeWarning);
-    updateModeWarning();
-  </script>
+<main>
+  <h1>⚡ AeroTune</h1>
+  <p>Betaflight-style FPV PID advice with simple feel-based recommendations.</p>
+
+  <section class="card">
+    <h2>Upload & Tune Goal</h2>
+    <form id="uploadForm">
+      <label>CSV Log File</label>
+      <input id="file" name="file" type="file" accept=".csv" required />
+
+      <label>Drone Size</label>
+      <select id="drone_size" name="drone_size">
+        <option value="7" selected>7 inch</option>
+        <option value="5">5 inch</option>
+      </select>
+
+      <label>Tune Goal</label>
+      <select id="tuning_goal" name="tuning_goal">
+        <option value="efficient" selected>Efficient / Smooth</option>
+        <option value="locked_in">Locked-In / Responsive</option>
+        <option value="floaty">Floaty / Cinematic</option>
+      </select>
+
+      <button type="submit">Analyze Log</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Summary</h2>
+    <div id="summary">Waiting for upload.</div>
+  </section>
+
+  <section class="card">
+    <h2>Pilot Tune Notes</h2>
+    <div id="axes" class="grid"></div>
+  </section>
+
+  <section class="card">
+    <h2>Copyable Pilot Notes</h2>
+    <pre id="copyNotes">No analysis yet.</pre>
+  </section>
+
+  <section class="card">
+    <h2>Machine Output</h2>
+    <pre id="raw">No analysis yet.</pre>
+  </section>
+</main>
+
+<script>
+const form = document.getElementById("uploadForm");
+const summary = document.getElementById("summary");
+const axes = document.getElementById("axes");
+const raw = document.getElementById("raw");
+const copyNotes = document.getElementById("copyNotes");
+
+function percentMove(value) {
+  const n = Number(value || 0) * 100;
+  if (Math.abs(n) < 0.05) return "";
+  return `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
+}
+
+function deltaText(delta) {
+  const parts = [];
+  const p = percentMove(delta?.p);
+  const i = percentMove(delta?.i);
+  const d = percentMove(delta?.d);
+  const ff = percentMove(delta?.ff);
+
+  if (p) parts.push(`P ${p}`);
+  if (i) parts.push(`I ${i}`);
+  if (d) parts.push(`D ${d}`);
+  if (ff) parts.push(`FF ${ff}`);
+
+  return parts.length ? parts.join(" / ") : "No PID change";
+}
+
+function render(data) {
+  const analysis = data.analysis;
+
+  summary.innerHTML = `
+    <p><strong>${analysis.summary}</strong></p>
+    <p>Goal: ${analysis.tuning_goal || "efficient"} | Drone: ${analysis.drone_size}" | Log: ${analysis.duration_s}s @ ${analysis.sample_rate_hz}Hz</p>
+    ${(analysis.global_actions || []).map(a => `<p>• ${a}</p>`).join("")}
+    ${(analysis.warnings || []).map(w => `<p class="warn">⚠️ ${w}</p>`).join("")}
+  `;
+
+  axes.innerHTML = "";
+  const notes = [];
+
+  for (const axisName of ["roll", "pitch", "yaw"]) {
+    const axis = analysis.axes?.[axisName];
+    if (!axis) continue;
+
+    const moves = deltaText(axis.pid_delta_pct);
+    const isClean = axis.issue === "clean_tune";
+
+    notes.push(`[${axis.axis_name}]`);
+    notes.push(`Outcome: ${axis.feel}`);
+    notes.push(`Change: ${moves}`);
+    notes.push(axis.recommendation_text);
+    for (const move of axis.tuning_moves || []) notes.push(`- ${move}`);
+    notes.push(`Confidence: ${axis.confidence}`);
+    notes.push("");
+
+    const div = document.createElement("div");
+    div.className = "axis";
+    div.innerHTML = `
+      <span class="badge">${axis.axis_name}</span>
+      <h3 class="${isClean ? "clean" : ""}">${axis.feel}</h3>
+      ${axis.propwash_detected ? `<p class="warn"><strong>Propwash detected</strong></p>` : ""}
+      <p class="move">${moves}</p>
+      <p>${axis.recommendation_text}</p>
+      <p><strong>What to try:</strong></p>
+      <ul>${(axis.tuning_moves || []).map(m => `<li>${m}</li>`).join("")}</ul>
+      <p><strong>Confidence:</strong> ${axis.confidence}</p>
+    `;
+
+    axes.appendChild(div);
+  }
+
+  copyNotes.textContent = notes.join("\n");
+  raw.textContent = JSON.stringify(analysis, null, 2);
+}
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  summary.textContent = "Analyzing...";
+  axes.innerHTML = "";
+  raw.textContent = "";
+  copyNotes.textContent = "";
+
+  const formData = new FormData();
+  formData.append("file", document.getElementById("file").files[0]);
+  formData.append("drone_size", document.getElementById("drone_size").value);
+  formData.append("tuning_goal", document.getElementById("tuning_goal").value);
+
+  const response = await fetch("/upload-log", { method: "POST", body: formData });
+  const data = await response.json();
+
+  if (!response.ok) {
+    summary.innerHTML = `<p class="warn">${data.error || "Upload failed."}</p>`;
+    raw.textContent = JSON.stringify(data, null, 2);
+    return;
+  }
+
+  render(data);
+});
+</script>
 </body>
 </html>

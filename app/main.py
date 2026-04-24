@@ -12,6 +12,7 @@ from app.analyzer import detect_oscillation
 from app.log_validator import validate_log
 from app.parser import parse_log
 
+
 app = FastAPI(title="AeroTune")
 
 UPLOAD_DIR = Path("uploads")
@@ -24,18 +25,23 @@ ALLOWED_TUNING_GOALS = {
     "efficient",
     "locked_in",
     "floaty",
-    # Backward-compatible aliases from the older UI.
     "efficiency",
     "efficiency_snappy",
     "efficiency_floaty",
     "snappy",
+    "smooth",
+    "cinematic",
 }
+
 TUNING_GOAL_ALIASES = {
     "efficiency": "efficient",
     "efficiency_snappy": "locked_in",
     "efficiency_floaty": "floaty",
     "snappy": "locked_in",
+    "smooth": "efficient",
+    "cinematic": "floaty",
 }
+
 MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -43,20 +49,22 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 def error_response(message: str, status_code: int = 400, **extra):
     payload = {"error": message}
-    if extra:
-        payload.update(extra)
+    payload.update(extra)
     return JSONResponse(payload, status_code=status_code)
 
 
 def normalize_tuning_goal(tuning_goal: str) -> str:
-    raw = (tuning_goal or "efficient").strip().lower()
+    raw = (tuning_goal or "efficient").strip().lower().replace("-", "_").replace(" ", "_")
     return TUNING_GOAL_ALIASES.get(raw, raw)
 
 
 def safe_filename(filename: str) -> str:
     raw = (filename or "upload.csv").strip()
     name = Path(raw).name
-    cleaned = "".join(ch if ch.isalnum() or ch in {"-", "_", ".", " "} else "_" for ch in name).strip(" .")
+    cleaned = "".join(
+        ch if ch.isalnum() or ch in {"-", "_", ".", " "} else "_"
+        for ch in name
+    ).strip(" .")
     return cleaned or "upload.csv"
 
 
@@ -73,6 +81,7 @@ def save_upload(file: UploadFile) -> Path:
         suffix += 1
 
     bytes_written = 0
+
     with open(path, "wb") as buffer:
         while True:
             chunk = file.file.read(1024 * 1024)
@@ -104,19 +113,27 @@ def build_plot_payload(df):
     if len(time) < 8:
         raise ValueError("Not enough samples to plot.")
 
-    dt = float(np.mean(np.diff(time)))
+    dt = float(np.median(np.diff(time)))
     if not np.isfinite(dt) or dt <= 0:
         dt = 0.001
 
-    # Betaflight-style CSVs may store time in microseconds.
-    if dt > 1:
-        dt = dt / 1_000_000.0
+    max_points = 5000
+    if len(time) > max_points:
+        idx = np.linspace(0, len(time) - 1, max_points).astype(int)
+        plot_time = time[idx]
+        plot_gyro = gyro[idx]
+        plot_setpoint = setpoint[idx]
+    else:
+        plot_time = time
+        plot_gyro = gyro
+        plot_setpoint = setpoint
 
     alpha = 0.35
-    smoothed = np.empty_like(gyro)
-    smoothed[0] = gyro[0]
-    for i in range(1, len(gyro)):
-        smoothed[i] = smoothed[i - 1] + alpha * (gyro[i] - smoothed[i - 1])
+    smoothed = np.empty_like(plot_gyro)
+    smoothed[0] = plot_gyro[0]
+
+    for i in range(1, len(plot_gyro)):
+        smoothed[i] = smoothed[i - 1] + alpha * (plot_gyro[i] - smoothed[i - 1])
 
     centered = gyro - np.mean(gyro)
     window = np.hanning(len(centered))
@@ -130,13 +147,18 @@ def build_plot_payload(df):
 
     peak_frequency_hz = None
     if len(freqs) > 0:
-        idx = int(np.argmax(mags))
-        peak_frequency_hz = float(freqs[idx])
+        peak_frequency_hz = float(freqs[int(np.argmax(mags))])
+
+    max_fft_points = 3000
+    if len(freqs) > max_fft_points:
+        idx = np.linspace(0, len(freqs) - 1, max_fft_points).astype(int)
+        freqs = freqs[idx]
+        mags = mags[idx]
 
     return {
-        "time": time.tolist(),
-        "gyro": gyro.tolist(),
-        "setpoint": setpoint.tolist(),
+        "time": plot_time.tolist(),
+        "gyro": plot_gyro.tolist(),
+        "setpoint": plot_setpoint.tolist(),
         "simulated": smoothed.tolist(),
         "freqs": freqs.tolist(),
         "magnitude": mags.tolist(),
@@ -186,21 +208,7 @@ async def upload_log(
             )
 
         validation = validate_log(df)
-        if not validation["valid"]:
-            return error_response(
-                "Log quality is too low for reliable PID analysis.",
-                422,
-                filename=saved_path.name,
-                rows=int(len(df)),
-                columns=list(df.columns),
-                validation=validation,
-            )
-
-        analysis = detect_oscillation(
-            df,
-            drone_size=drone_size,
-            tuning_goal=normalized_goal,
-        )
+        analysis = detect_oscillation(df, drone_size=drone_size, tuning_goal=normalized_goal)
 
         return {
             "filename": saved_path.name,
@@ -223,8 +231,6 @@ async def upload_log(
 
 @app.get("/plot")
 def plot():
-    global LAST_FILE_PATH
-
     try:
         if LAST_FILE_PATH is None or not LAST_FILE_PATH.exists():
             return error_response("No uploaded file available yet.", 400)
