@@ -14,11 +14,21 @@ AXIS_MAP = {
 }
 
 GOALS = {
+    "efficient",
+    "locked_in",
+    "floaty",
+    # Backward-compatible aliases from earlier AeroTune UI versions.
     "efficiency",
     "efficiency_snappy",
     "efficiency_floaty",
     "snappy",
-    "floaty",
+}
+
+GOAL_ALIASES = {
+    "efficiency": "efficient",
+    "efficiency_snappy": "locked_in",
+    "efficiency_floaty": "floaty",
+    "snappy": "locked_in",
 }
 
 DRONE_BANDS = {
@@ -27,11 +37,9 @@ DRONE_BANDS = {
 }
 
 SOURCE_REFERENCES = [
-    "Betaflight PID Tuning Guide",
-    "Betaflight PID tuning",
-    "Betaflight Feed Forward 2.0",
-    "Betaflight Dynamic D",
-    "Betaflight Freestyle Tuning Principles",
+    "Betaflight PID Tuning Guide: https://betaflight.com/docs/wiki/guides/current/PID-Tuning-Guide",
+    "Betaflight tuning basis: P sharpens response, I improves hold, D damps bounceback/propwash, FF improves stick response.",
+    "Safety basis: keep D conservative and check motor temperature after D/filter changes.",
 ]
 
 
@@ -218,49 +226,47 @@ def _base_delta_for_issue(axis: str, issue: str) -> Dict[str, float]:
 
 
 def _apply_goal_bias(delta: Dict[str, float], axis: str, issue: str, goal: str) -> Dict[str, float]:
+    """
+    Converts detected flight behavior into conservative percentage deltas.
+
+    Betaflight-based model:
+    - P sharpens authority/tracking but can oscillate if pushed too far.
+    - I improves attitude hold, especially through throttle changes, but too much can feel stiff.
+    - D damps bounceback/propwash, but too much D can heat motors or amplify noise.
+    - FF improves stick response without using P as the only way to make the quad feel sharp.
+    """
     result = dict(delta)
 
-    if goal == "efficiency":
-        result["p"] *= 0.8
-        result["i"] *= 0.9
-        result["d"] *= 0.7
-        result["ff"] *= 0.8
+    if goal == "efficient":
+        result["p"] *= 0.80
+        result["i"] *= 0.90
+        result["d"] *= 0.70
+        result["ff"] *= 0.80
 
-    elif goal == "efficiency_snappy":
-        result["p"] *= 0.9
-        result["i"] *= 0.95
-        result["d"] *= 0.85
-        result["ff"] *= 0.9
-
+    elif goal == "locked_in":
         if issue in {"poor_tracking", "slow_response", "mostly_clean"}:
-            result["p"] += 0.005 if axis != "yaw" else 0.003
-            result["ff"] += 0.01
+            result["p"] += 0.010 if axis != "yaw" else 0.005
+            result["ff"] += 0.020
 
-    elif goal == "efficiency_floaty":
-        result["p"] *= 0.9
-        result["i"] *= 0.95
-        result["d"] *= 0.85
-        result["ff"] *= 0.9
+        if issue == "drift_or_weak_hold":
+            result["i"] += 0.010
 
-        if issue in {"mostly_clean", "poor_tracking", "slow_response"}:
-            result["p"] -= 0.01 if axis != "yaw" else 0.005
-            result["ff"] -= 0.015
-
-    elif goal == "snappy":
-        if issue in {"poor_tracking", "slow_response", "mostly_clean"}:
-            result["p"] += 0.01 if axis != "yaw" else 0.005
-            result["ff"] += 0.02
         if issue == "propwash_or_bounceback" and axis != "yaw":
             result["d"] += 0.005
-        if issue == "high_frequency_noise":
+
+        if issue in {"high_frequency_noise", "mid_frequency_vibration"}:
             result["d"] = min(result["d"], 0.0)
 
     elif goal == "floaty":
         if issue in {"mostly_clean", "poor_tracking", "slow_response"}:
-            result["p"] -= 0.02 if axis != "yaw" else 0.01
-            result["ff"] -= 0.02
+            result["p"] -= 0.020 if axis != "yaw" else 0.010
+            result["ff"] -= 0.020
+
         if issue == "propwash_or_bounceback" and axis != "yaw":
             result["d"] -= 0.005
+
+        if issue == "drift_or_weak_hold":
+            result["i"] += 0.005
 
     result["p"] = float(np.clip(result["p"], -0.06, 0.06))
     result["i"] = float(np.clip(result["i"], -0.06, 0.06))
@@ -271,7 +277,6 @@ def _apply_goal_bias(delta: Dict[str, float], axis: str, issue: str, goal: str) 
         result["d"] = 0.0
 
     return result
-
 
 def _feel_text(issue: str, goal: str) -> str:
     if issue == "slow_response":
@@ -288,12 +293,11 @@ def _feel_text(issue: str, goal: str) -> str:
         return "Harsh / noisy"
     if issue == "propwash_or_bounceback":
         return "Washy / bounceback"
-    if goal in {"snappy", "efficiency_snappy"}:
+    if goal == "locked_in":
         return "Mostly clean, but can be sharper"
-    if goal in {"floaty", "efficiency_floaty"}:
+    if goal == "floaty":
         return "Mostly clean, but can be softer"
     return "Mostly clean / efficient"
-
 
 def _actions_for_issue(issue: str, goal: str) -> List[str]:
     base = []
@@ -302,68 +306,60 @@ def _actions_for_issue(issue: str, goal: str) -> List[str]:
         base.extend([
             "Noise looks high. Lower P and D a little.",
             "Fix props, motors, filtering, or frame problems before pushing tune harder.",
-            "Keep D conservative here.",
+            "Keep D conservative here because D can amplify noise and heat motors.",
         ])
     elif issue == "mid_frequency_vibration":
         base.extend([
             "Back off P and D a little.",
-            "Check prop balance and frame vibration.",
+            "Check prop balance, motor condition, stack mounting, and frame vibration.",
         ])
     elif issue == "low_frequency_oscillation":
         base.extend([
             "Reduce P a little first.",
-            "If it still bounces, reduce D a little too.",
+            "If it still bounces, tune D carefully instead of making large jumps.",
         ])
     elif issue == "drift_or_weak_hold":
         base.extend([
-            "Angle hold looks weak.",
-            "Increase I a little to improve hold on throttle changes and general drift control.",
+            "Attitude hold looks weak.",
+            "Increase I slightly to improve hold through throttle changes and drift.",
         ])
     elif issue == "poor_tracking":
         base.extend([
-            "Response looks soft.",
-            "A small P increase and a small FF increase can help.",
+            "Response looks soft or disconnected from setpoint.",
+            "A small P increase and FF increase can improve locked-in stick tracking.",
         ])
     elif issue == "slow_response":
         base.extend([
             "Response looks delayed.",
-            "A small FF increase is the safest first move.",
+            "A small FF increase is usually the safest first move for response.",
         ])
     elif issue == "propwash_or_bounceback":
         base.extend([
             "This looks like bounceback or propwash.",
-            "Increase D only as much as needed.",
+            "Increase D only as much as needed, because excess D can heat motors.",
             "If the build is clean, consider D Max 20–30% above base D instead of making base D too high.",
             "After D changes, do a short flight and check motor temperature.",
         ])
     else:
         base.append("Log looks mostly clean. Only tiny changes make sense.")
 
-    if goal == "efficiency":
-        base.append("Goal is efficiency, so changes stay smaller and safer.")
-    elif goal == "efficiency_snappy":
-        base.append("Goal is efficiency first, with a small snappier bias.")
-    elif goal == "efficiency_floaty":
-        base.append("Goal is efficiency first, with a small floatier bias.")
-    elif goal == "snappy":
-        base.append("Goal is sharp stick response, so P and FF get more priority.")
+    if goal == "efficient":
+        base.append("Goal is efficient/smooth, so changes stay smaller and safer.")
+    elif goal == "locked_in":
+        base.append("Goal is locked-in response, so P, I, and FF get priority only when the signal supports it.")
     elif goal == "floaty":
-        base.append("Goal is a looser, smoother feel, so P and FF are softened slightly.")
+        base.append("Goal is floaty/soft, so P and FF are softened unless correction is clearly needed.")
 
     return base
 
-
 def _warnings_for_goal(goal: str) -> List[str]:
-    if goal == "efficiency_snappy":
-        return ["This may reduce efficiency slightly while improving sharpness and stick response."]
-    if goal == "efficiency_floaty":
-        return ["This may reduce efficiency slightly while improving a looser, floatier feel."]
-    if goal == "snappy":
-        return ["This can reduce efficiency and increase twitchiness or overshoot if pushed too far."]
+    if goal == "locked_in":
+        return ["Locked-in tuning can increase heat, twitchiness, or overshoot if P/D/FF are pushed too far."]
     if goal == "floaty":
-        return ["This can reduce sharpness and response speed in exchange for a softer feel."]
+        return ["Floaty tuning reduces sharpness and response speed in exchange for a smoother feel."]
+    if goal == "efficient":
+        return ["Efficient tuning prioritizes conservative changes, lower heat risk, and smoother response over maximum sharpness."]
     return []
-
 
 def _recommendation_text(axis: str, issue: str, goal: str, delta: Dict[str, float], valid_for_pid: bool) -> str:
     if not valid_for_pid:
@@ -400,7 +396,8 @@ def detect_oscillation(
         }
 
     if tuning_goal not in GOALS:
-        tuning_goal = "efficiency"
+        tuning_goal = "efficient"
+    tuning_goal = GOAL_ALIASES.get(tuning_goal, tuning_goal)
 
     if "time" not in df.columns:
         return {
@@ -539,7 +536,7 @@ def detect_oscillation(
     if valid_axis_count == 0:
         summary = "Diagnosis available, but confidence is too low for safe PID changes."
     else:
-        summary = f"Analysis complete for {tuning_goal.replace('_', ' ')}. Conservative PID deltas are available."
+        summary = f"Analysis complete using Betaflight-based tuning logic for a {tuning_goal.replace('_', ' ')} feel. Conservative PID deltas are available."
 
     global_actions.append("Use small changes and test one step at a time.")
     global_actions.append("If D goes up, do a short flight and check motor temperature before continuing.")

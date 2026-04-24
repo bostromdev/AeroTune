@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.analyzer import detect_oscillation
+from app.log_validator import validate_log
 from app.parser import parse_log
 
 app = FastAPI(title="AeroTune")
@@ -20,11 +21,20 @@ LAST_FILE_PATH: Optional[Path] = None
 
 ALLOWED_DRONE_SIZES = {"5", "7"}
 ALLOWED_TUNING_GOALS = {
+    "efficient",
+    "locked_in",
+    "floaty",
+    # Backward-compatible aliases from the older UI.
     "efficiency",
     "efficiency_snappy",
     "efficiency_floaty",
     "snappy",
-    "floaty",
+}
+TUNING_GOAL_ALIASES = {
+    "efficiency": "efficient",
+    "efficiency_snappy": "locked_in",
+    "efficiency_floaty": "floaty",
+    "snappy": "locked_in",
 }
 MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024
 
@@ -36,6 +46,11 @@ def error_response(message: str, status_code: int = 400, **extra):
     if extra:
         payload.update(extra)
     return JSONResponse(payload, status_code=status_code)
+
+
+def normalize_tuning_goal(tuning_goal: str) -> str:
+    raw = (tuning_goal or "efficient").strip().lower()
+    return TUNING_GOAL_ALIASES.get(raw, raw)
 
 
 def safe_filename(filename: str) -> str:
@@ -93,6 +108,10 @@ def build_plot_payload(df):
     if not np.isfinite(dt) or dt <= 0:
         dt = 0.001
 
+    # Betaflight-style CSVs may store time in microseconds.
+    if dt > 1:
+        dt = dt / 1_000_000.0
+
     alpha = 0.35
     smoothed = np.empty_like(gyro)
     smoothed[0] = gyro[0]
@@ -138,7 +157,7 @@ def home():
 async def upload_log(
     file: UploadFile = File(...),
     drone_size: str = Form("7"),
-    tuning_goal: str = Form("efficiency"),
+    tuning_goal: str = Form("efficient"),
 ):
     global LAST_FILE_PATH
 
@@ -152,11 +171,9 @@ async def upload_log(
         if drone_size not in ALLOWED_DRONE_SIZES:
             return error_response("Invalid drone size. Use 5 or 7.", 400)
 
-        if tuning_goal not in ALLOWED_TUNING_GOALS:
-            return error_response(
-                "Invalid tuning goal. Use efficiency, efficiency_snappy, efficiency_floaty, snappy, or floaty.",
-                400,
-            )
+        normalized_goal = normalize_tuning_goal(tuning_goal)
+        if normalized_goal not in {"efficient", "locked_in", "floaty"}:
+            return error_response("Invalid tuning goal. Use efficient, locked_in, or floaty.", 400)
 
         saved_path = save_upload(file)
         LAST_FILE_PATH = saved_path
@@ -168,16 +185,28 @@ async def upload_log(
                 400,
             )
 
+        validation = validate_log(df)
+        if not validation["valid"]:
+            return error_response(
+                "Log quality is too low for reliable PID analysis.",
+                422,
+                filename=saved_path.name,
+                rows=int(len(df)),
+                columns=list(df.columns),
+                validation=validation,
+            )
+
         analysis = detect_oscillation(
             df,
             drone_size=drone_size,
-            tuning_goal=tuning_goal,
+            tuning_goal=normalized_goal,
         )
 
         return {
             "filename": saved_path.name,
             "rows": int(len(df)),
             "columns": list(df.columns),
+            "validation": validation,
             "analysis": analysis,
         }
 
