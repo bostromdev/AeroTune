@@ -146,6 +146,10 @@ Apache 2.0 — free to use, modify, and build on with attribution.
 Built by Christopher Bostrom  
 GitHub: https://github.com/bostromdev  
 
+## 🌐 Live Demo
+[https://aerotune.onrender.com](https://aerotune.onrender.com)
+
+⚠️ Note: First load may take ~30 seconds due to free hosting.
 ---
 
 ## 🚀 Final Note
