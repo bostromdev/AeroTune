@@ -1,48 +1,100 @@
 # AeroTune Sources & Tuning References
 
-AeroTune uses conservative, Betaflight-style tuning rules. It does not output final PID numbers. It outputs small percentage deltas and pilot-facing explanations.
+AeroTune uses conservative, feel-based PID recommendations grounded in Betaflight tuning principles.
 
-## Primary source
+## Primary Source
 
-- Betaflight PID Tuning Guide  
-  https://betaflight.com/docs/wiki/guides/current/PID-Tuning-Guide
+Betaflight PID Tuning Guide  
+https://betaflight.com/docs/wiki/guides/current/PID-Tuning-Guide
 
-## Rules implemented
+Key rules used in AeroTune:
 
-### P — Proportional
-- Used for tracking and authority.
-- More P feels sharper.
-- Too much P can overshoot or oscillate.
-- AeroTune raises P only for soft tracking / poor authority.
-- AeroTune lowers P for slow bounce, over-correction, and high-throttle oscillation.
+- P controls how tightly the quad tracks setpoint. Higher P feels sharper, but too much can overshoot or oscillate.
+- I improves attitude hold against wind, CG imbalance, throttle changes, and persistent bias.
+- D adds damping for bounceback and propwash, but it also amplifies high-frequency noise and can heat motors.
+- Feedforward improves stick response without forcing P to do all the response work.
+- Yaw D is normally kept at 0. Yaw is mainly tuned with P, I, and FF.
+- Raise D only when it helps propwash or bounceback, and always check motor temperature after D changes.
+- If high-frequency noise is detected, do not raise D. Fix mechanical/filtering issues first.
 
-### I — Integral
-- Used for attitude hold against wind, CG bias, and throttle changes.
-- AeroTune raises I for weak hold / drift.
-- AeroTune avoids changing I for noise, propwash, or simple stick-response problems.
+## AeroTune Rule Mapping
 
-### D — Derivative / damping
-- Used for damping bounceback and propwash.
-- D can amplify gyro noise and heat motors.
-- AeroTune raises D only for roll/pitch propwash or bounceback.
-- AeroTune lowers or avoids D for high-frequency noise, vibration, or warm/rough motors.
-- AeroTune always warns to check motor temperature after increasing D.
+### Clean Tune
+Detected when:
+- setpoint tracking is high
+- tracking error is low
+- residual high-frequency noise is low
+- no throttle or stop-related error spikes dominate
 
-### Feedforward
-- Used for stick response.
-- AeroTune raises FF for delayed/soft stick response.
-- AeroTune does not use FF to solve noise, drift, or propwash.
+Output:
+- no PID repair needed
+- optional feel changes only for Locked-In or Floaty goals
 
-### Yaw
-- Yaw D normally stays 0.
-- AeroTune keeps yaw D at 0 and tunes yaw with P/I/FF only.
+### High-Frequency Noise
+Detected when:
+- residual high/ultra frequency energy is elevated
+- error may be small overall, but fast residual noise dominates
 
-## CSV Optimizer
+Fix:
+- lower D or do not raise D
+- lower P slightly only if harsh/twitchy
+- check props, motors, frame, stack mounting, RPM filtering, dynamic filtering
 
-The optimizer converts common Blackbox CSV names into AeroTune's canonical format:
+### Mid-Frequency Vibration
+Detected when:
+- residual or gyro mid-band energy is elevated
 
-```text
-time, gyro_x, gyro_y, gyro_z, setpoint_roll, setpoint_pitch, setpoint_yaw, throttle
+Fix:
+- inspect mechanical build first
+- soften P/D slightly if the build is clean
+
+### Propwash / Bounceback
+Detected when:
+- error rises around throttle transitions, stops, or disturbed-air recovery
+- residual is not primarily high-frequency noise
+
+Fix:
+- roll/pitch: raise D slightly or use D Max style damping
+- do not raise P first
+- check motor temperature after D changes
+
+### Low-Frequency Oscillation
+Detected when:
+- residual low-band motion dominates
+- tracking is not clean
+- high-frequency noise is not the main issue
+
+Fix:
+- lower P first
+- leave D alone unless bounceback/propwash remains
+
+### Weak Hold / Drift
+Detected when:
+- residual error persists during quiet-stick or low-input sections
+
+Fix:
+- raise I slightly
+
+### Poor Tracking / Slow Response
+Detected when:
+- gyro/setpoint correlation is low, or lag is high
+
+Fix:
+- raise P for tracking
+- raise FF first when the issue is delayed stick response
+
+## Log Optimizer Format
+
+AeroTune-ready CSV format:
+
+```csv
+time,gyro_x,gyro_y,gyro_z,setpoint_roll,setpoint_pitch,setpoint_yaw,throttle
 ```
 
-This makes user logs easier to share, test, and compare.
+## Safety Notes
+
+- Make one small change at a time.
+- Retest after every change.
+- Check motor temperature after raising D.
+- Fix mechanical noise before using PID to hide vibration.
+- These are conservative percentage deltas, not final PID numbers.
