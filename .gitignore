@@ -5,6 +5,7 @@
 *.save
 .DS_Store
 .env
+AeroTune_OLD_FILES_TO_DELETE/
 __pycache__/
 sample_logs/*.csv
 static/index_original.html
