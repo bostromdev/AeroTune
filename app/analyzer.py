@@ -57,6 +57,8 @@ class AxisStats:
     tracking_error_rms: float
     setpoint_rms: float
     error_ratio: float
+    propwash_score: float
+    throttle_activity: float
 
 
 def _band_energy(freqs: np.ndarray, mags: np.ndarray, low: float, high: float) -> float:
@@ -93,6 +95,7 @@ def _compute_axis_stats(
     setpoint: np.ndarray,
     sample_rate_hz: float,
     bands: Dict[str, Tuple[float, float]],
+    throttle: Optional[np.ndarray] = None,
 ) -> AxisStats:
     centered = gyro - np.mean(gyro)
     window = np.hanning(len(centered))
@@ -125,6 +128,26 @@ def _compute_axis_stats(
     setpoint_rms = float(np.sqrt(np.mean(np.square(setpoint)))) if len(setpoint) else 0.0
     error_ratio = tracking_error_rms / max(setpoint_rms, 1e-6)
 
+    # Propwash/bounceback is usually bursty and appears around throttle movement,
+    # drops, turns, and dirty-air recovery rather than as one steady wobble.
+    propwash_score = 0.0
+    throttle_activity = 0.0
+    if throttle is not None and len(throttle) == len(gyro):
+        th = np.asarray(throttle, dtype=float)
+        if np.all(np.isfinite(th)) and np.std(th) > 1e-6:
+            dth = np.abs(np.gradient(th))
+            throttle_activity = float(np.std(th) + np.mean(dth) * 8.0)
+            residual = np.abs(tracking_error - np.median(tracking_error))
+            transition_cut = np.quantile(dth, 0.82)
+            calm_cut = np.quantile(dth, 0.45)
+            transition_mask = dth >= transition_cut
+            calm_mask = dth <= calm_cut
+
+            if np.any(transition_mask) and np.any(calm_mask):
+                transition_rms = float(np.sqrt(np.mean(np.square(residual[transition_mask]))))
+                calm_rms = float(np.sqrt(np.mean(np.square(residual[calm_mask]))))
+                propwash_score = transition_rms / max(calm_rms, 1e-6)
+
     return AxisStats(
         dominant_freq_hz=dominant_freq_hz,
         low_energy=low_energy,
@@ -138,6 +161,8 @@ def _compute_axis_stats(
         tracking_error_rms=tracking_error_rms,
         setpoint_rms=setpoint_rms,
         error_ratio=float(error_ratio),
+        propwash_score=float(propwash_score),
+        throttle_activity=float(throttle_activity),
     )
 
 
@@ -155,27 +180,44 @@ def _classify_issue(stats: AxisStats) -> Tuple[str, float]:
         confidence += 0.10
     if stats.lag_ms is not None:
         confidence += 0.10
+    if stats.propwash_score > 1.0:
+        confidence += 0.10
 
-    # Noise / oscillation first
+    # Propwash / bounceback needs to be checked before generic low-frequency wobble.
+    # Otherwise dirty-air logs get mislabeled as only "loose / bouncing."
+    bursty_dirty_air = (
+        stats.propwash_score >= 1.35
+        and stats.throttle_activity > 0.02
+        and stats.peak_to_peak > 3.0 * max(stats.rms, 1e-6)
+    )
+    mixed_low_mid_energy = low_ratio > 0.25 and (mid_ratio > 0.18 or high_ratio > 0.12)
+
+    if bursty_dirty_air or (
+        stats.propwash_score >= 1.20
+        and mixed_low_mid_energy
+        and stats.error_ratio > 0.12
+    ):
+        return "propwash_or_bounceback", min(confidence + 0.25, 1.0)
+
     if high_ratio > 0.50:
         return "high_frequency_noise", min(confidence + 0.20, 1.0)
 
     if mid_ratio > 0.45:
         return "mid_frequency_vibration", min(confidence + 0.20, 1.0)
 
-    if low_ratio > 0.45:
-        return "low_frequency_oscillation", min(confidence + 0.20, 1.0)
+    if low_ratio > 0.55:
+        return "low_frequency_oscillation", min(confidence + 0.18, 1.0)
 
-    # Bounceback / propwash-like behavior
+    # Fallback catch for sharp bounceback spikes when throttle data is weak.
     if (
         stats.rms > 0
-        and stats.peak_to_peak > 4.0 * stats.rms
+        and stats.peak_to_peak > 4.5 * stats.rms
+        and stats.error_ratio > 0.18
         and stats.corr is not None
-        and stats.corr > 0.45
+        and stats.corr > 0.35
     ):
         return "propwash_or_bounceback", min(confidence + 0.15, 1.0)
 
-    # Drift / weak hold maps closer to I guidance
     if (
         stats.error_ratio > 0.55
         and (stats.lag_ms is None or abs(stats.lag_ms) < 20.0)
@@ -183,7 +225,6 @@ def _classify_issue(stats: AxisStats) -> Tuple[str, float]:
     ):
         return "drift_or_weak_hold", min(confidence + 0.15, 1.0)
 
-    # Soft / delayed tracking maps to P and FF guidance
     if stats.corr is not None and stats.corr < 0.35:
         return "poor_tracking", min(confidence + 0.15, 1.0)
 
@@ -341,9 +382,11 @@ def _actions_for_issue(issue: str, goal: str) -> List[str]:
         ])
     elif issue == "propwash_or_bounceback":
         base.extend([
-            "This would probably show up after flips, drops, hard turns, or throttle chops.",
-            "You may feel a bounce, shake, or washout when the props hit dirty air.",
-            "Tune direction: add damping carefully, then check motor temps after a short test flight.",
+            "This is more like dirty-air shake than a normal constant wobble.",
+            "You would usually feel it after throttle chops, split-S moves, dives, hard turns, or recovering from drops.",
+            "The quad may feel okay in clean air, then suddenly shake or bounce when the props hit disturbed air.",
+            "Tune direction: improve damping and propwash handling carefully, not by blindly making the whole tune sharper.",
+            "If the build is mechanically clean, test small D / D Max style changes and check motor temperature right after landing.",
         ])
     else:
         base.extend([
@@ -383,7 +426,7 @@ def _recommendation_text(axis: str, issue: str, goal: str, delta: Dict[str, floa
         "drift_or_weak_hold": f"{axis_label}: This looks like weak hold. It may feel like the quad slowly leans or needs extra correction when throttle changes.",
         "poor_tracking": f"{axis_label}: This looks like soft stick tracking. It may feel like your stick input and the quad are not fully connected.",
         "slow_response": f"{axis_label}: This looks delayed. It may feel lazy, floaty, or late when you try to snap into a move.",
-        "propwash_or_bounceback": f"{axis_label}: This looks like propwash or bounceback. You may notice shake after flips, drops, hard turns, or throttle chops.",
+        "propwash_or_bounceback": f"{axis_label}: This looks like propwash or bounceback, not just a steady wobble. It likely shows up when the props hit dirty air after throttle chops, drops, hard turns, or recovery moves.",
         "mostly_clean": f"{axis_label}: This looks mostly clean. Do not chase big changes; tune by feel from here.",
     }
 
@@ -481,8 +524,9 @@ def detect_oscillation(
 
         gyro = df[gyro_col].to_numpy(dtype=float)
         setpoint = df[setpoint_col].to_numpy(dtype=float) if setpoint_col in df.columns else np.zeros_like(gyro)
+        throttle = df["throttle"].to_numpy(dtype=float) if "throttle" in df.columns else None
 
-        stats = _compute_axis_stats(gyro, setpoint, sample_rate_hz, bands)
+        stats = _compute_axis_stats(gyro, setpoint, sample_rate_hz, bands, throttle=throttle)
         issue, confidence = _classify_issue(stats)
 
         base_delta = _base_delta_for_issue(axis_name, issue)
@@ -512,6 +556,8 @@ def detect_oscillation(
                 "total_band_energy": round(stats.total_energy, 4),
                 "rms": round(stats.rms, 4),
                 "peak_to_peak": round(stats.peak_to_peak, 4),
+                "propwash_score": round(stats.propwash_score, 4),
+                "throttle_activity": round(stats.throttle_activity, 4),
             },
             "tracking": {
                 "corr": None if stats.corr is None else round(stats.corr, 4),
