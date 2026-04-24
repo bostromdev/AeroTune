@@ -13,7 +13,15 @@ What should I test next?
 
 ---
 
-## 🚀 Demo
+## 🖥️ Why AeroTune Runs Locally
+
+AeroTune is designed as a local-first tool.
+
+FPV Blackbox CSV logs can be large, especially when recording longer flights or high-rate gyro data. Running AeroTune locally avoids common web-hosting issues such as upload limits, request timeouts, slow processing, and failed large-file uploads.
+
+Local use also keeps flight logs on the pilot’s own machine instead of forcing uploads to a server.
+
+For this stage of the project, local-first development keeps AeroTune practical, fast, and easier to maintain as a solo-built tool. The focus is on improving the analyzer logic, CSV optimizer, and tuning recommendations before building a more complex hosted interface.
 
 ### Dashboard
 
