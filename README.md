@@ -37,6 +37,9 @@ https://aerotune.onrender.com
 
 Flight → Blackbox Log → CSV → AeroTune → PID Recommendations
 
+## 📸 UI Preview
+
+![AeroTune UI](docs/aerotune-ui.png)
 ---
 
 ## 🖥️ Setup
