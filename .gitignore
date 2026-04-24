@@ -1,11 +1,9 @@
+*.save
 __pycache__/
 *.pyc
 .DS_Store
+.env
 uploads/*
 !uploads/.gitkeep
-
-# macOS
-.DS_Store
-
-# local backups
+sample_logs/*.csv
 static/index_original.html
