@@ -603,6 +603,26 @@
       <div class="section-kicker">Start here</div>
       <h2>Upload & Tune Goal</h2>
 
+      <div class="warning-banner">
+        <strong>Demo Mode Notice:</strong><br><br>
+        AeroTune is currently running as a hosted demo. Full CSV upload and analysis are temporarily disabled online due to file size limits and performance constraints on free hosting platforms.<br><br>
+
+        Blackbox logs are often large, and handling them reliably 24/7 on a server would require dedicated infrastructure well beyond what free tiers provide. Rather than offer an unstable experience, AeroTune is currently designed to run locally for full functionality.<br><br>
+
+        <strong>Good news:</strong> Running locally is fast, easy, and gives you full access to log optimization and analysis without any restrictions.<br><br>
+
+        We are actively working on a scalable solution for online uploads and will bring full hosted functionality back as soon as it can be done reliably.
+      </div>
+
+      <div class="soft-note">
+        <strong>Run locally:</strong><br>
+        <code>git clone https://github.com/bostromdev/AeroTune.git</code><br>
+        <code>cd AeroTune</code><br>
+        <code>python3 -m pip install -r requirements.txt</code><br>
+        <code>uvicorn main:app --reload</code>
+      </div>
+
+
       <div class="quality-note">
         <div class="quality-icon">📡</div>
         <div>
@@ -638,7 +658,7 @@
         </div>
 
         <div style="display:flex; align-items:end;">
-          <button onclick="analyzeLog()">Analyze Log</button>
+          <button disabled style="opacity:0.65; cursor:not-allowed;">Online Upload Disabled — Run Locally</button>
         </div>
       </div>
 
