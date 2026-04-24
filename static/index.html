@@ -771,8 +771,20 @@
         return;
       }
 
+      const selectedFile = fileInput.files[0];
+      const maxHostedUploadMb = 45;
+      const selectedSizeMb = selectedFile.size / (1024 * 1024);
+
+      if (selectedSizeMb > maxHostedUploadMb) {
+        setStatus(
+          `This CSV is ${selectedSizeMb.toFixed(1)} MB. The hosted demo works best under ${maxHostedUploadMb} MB. Try a shorter 30–60s log, export fewer fields, or run AeroTune locally for larger logs.`,
+          "bad"
+        );
+        return;
+      }
+
       const formData = new FormData();
-      formData.append("file", fileInput.files[0]);
+      formData.append("file", selectedFile);
       formData.append("drone_size", droneSize);
       formData.append("tuning_goal", tuningMode);
 
@@ -785,13 +797,22 @@
           body: formData
         });
 
-        const data = await res.json();
+        const rawText = await res.text();
+        let data = null;
+
+        try {
+          data = rawText ? JSON.parse(rawText) : {};
+        } catch (parseError) {
+          throw new Error(
+            "The server returned an HTML error page instead of analysis data. This usually means the upload was too large, the backend crashed, or Render was waking up. Try a smaller CSV first, then check Render logs if it repeats."
+          );
+        }
 
         if (!res.ok) {
           if (data.validation) {
             renderValidationFailure(data.validation);
           }
-          throw new Error(data.error || "Upload failed.");
+          throw new Error(data.error || data.message || "Upload failed.");
         }
 
         renderSources(data.analysis);
@@ -803,7 +824,7 @@
         if (data.analysis.valid_for_pid) {
           setStatus("Analysis complete. Feel-based tuning notes are ready.", "good");
         } else {
-          setStatus("Analysis complete. Diagnosis is available, but PID advice is limited.", "warn");
+          setStatus("Analysis complete. Diagnosis is available, but tuning advice is limited.", "warn");
         }
       } catch (err) {
         setStatus(err.message || "Something went wrong.", "bad");
@@ -1016,8 +1037,16 @@ tuningMode === "efficient" || tuningMode === "locked_in" || tuningMode === "floa
     async function renderPlots() {
       try {
         const res = await fetch("/plot");
-        const data = await res.json();
+        const rawText = await res.text();
         if (!res.ok) return;
+
+        let data = null;
+        try {
+          data = rawText ? JSON.parse(rawText) : {};
+        } catch (parseError) {
+          console.warn("Plot endpoint returned non-JSON response.");
+          return;
+        }
 
         if (gyroChart) gyroChart.destroy();
         if (freqChart) freqChart.destroy();
