@@ -340,67 +340,145 @@ def _feel_text(issue: str, goal: str) -> str:
         return "Mostly clean, but can be softer"
     return "Mostly clean / efficient"
 
+def _pid_moves_for_issue(axis: str, issue: str, goal: str) -> List[str]:
+    """
+    Human-facing tuning directions. No percentages here.
+    Numeric deltas stay in pid_delta_pct for machine/API use only.
+    """
+    yaw_note = "Yaw usually uses D = 0, so do not chase yaw propwash with D."
+
+    if issue == "propwash_or_bounceback":
+        if axis == "yaw":
+            return [
+                "D: leave alone / keep at 0 on yaw.",
+                "P: lower a little if yaw is visibly shaking on punch-outs or fast forward flight.",
+                "I: raise a little only if yaw will not hold heading through throttle changes.",
+                "FF: leave alone unless yaw feels delayed from stick input.",
+                yaw_note,
+            ]
+        return [
+            "D: raise a little first. This is the main Betaflight-style fix for propwash and bounceback.",
+            "P: do not raise P yet. If the bounce is slow or over-correcting, lower P a little instead.",
+            "I: leave I alone unless the quad is drifting or losing attitude on throttle changes.",
+            "FF: leave FF alone unless stick response itself feels lazy.",
+            "After raising D, do a short test flight and check motor temperature right away.",
+        ]
+
+    if issue == "low_frequency_oscillation":
+        return [
+            "P: lower a little. Slow bounce usually means the loop is pushing too hard or swinging past center.",
+            "D: raise a little only if it still bounces after P is calmer, but watch motor temperature.",
+            "I: leave alone unless the quad drifts or will not hold attitude.",
+            "FF: leave alone unless the stick feel is delayed.",
+        ]
+
+    if issue == "mid_frequency_vibration":
+        return [
+            "P: lower a little to calm the roughness.",
+            "D: lower a little if motors sound rough or come down warm.",
+            "I: leave alone unless attitude hold is weak.",
+            "FF: leave alone unless stick response is the actual complaint.",
+            "Also check props, motors, frame screws, and stack mounting before blaming only PID.",
+        ]
+
+    if issue == "high_frequency_noise":
+        return [
+            "D: lower or do not raise it. D amplifies gyro noise and can heat motors fast.",
+            "P: lower a little if the quad sounds harsh or twitchy.",
+            "I: leave alone unless the quad is drifting.",
+            "FF: leave alone unless stick response is the issue.",
+            "Fix mechanical noise first: props, motors, frame, filtering, and stack mounting.",
+        ]
+
+    if issue == "drift_or_weak_hold":
+        return [
+            "I: raise a little. I is what helps the quad hold attitude against throttle changes, wind, and bias.",
+            "P: leave mostly alone unless the quad also feels soft or sloppy.",
+            "D: leave alone unless there is bounceback or propwash.",
+            "FF: leave alone unless stick response feels delayed.",
+        ]
+
+    if issue == "poor_tracking":
+        return [
+            "P: raise a little if the quad feels soft and does not follow the sticks well.",
+            "FF: raise a little if the stick response feels delayed but the quad is otherwise clean.",
+            "D: leave alone unless bounceback or propwash appears.",
+            "I: leave alone unless it will not hold attitude through throttle changes.",
+        ]
+
+    if issue == "slow_response":
+        return [
+            "FF: raise a little first. FF improves stick response without making P do all the work.",
+            "P: raise a little only if it still feels soft after FF.",
+            "D: leave alone unless bounceback or propwash is showing up.",
+            "I: leave alone unless attitude hold is weak.",
+        ]
+
+    return [
+        "No major PID move needed from this log.",
+        "If it already flies good, do not chase changes just because the tool found small movement.",
+        "Make one tiny change at a time only if the feel matches what you see in the notes.",
+    ]
+
+
 def _actions_for_issue(issue: str, goal: str) -> List[str]:
     base: List[str] = []
 
     if issue == "high_frequency_noise":
         base.extend([
-            "This would probably feel buzzy, harsh, or nervous in the sticks.",
-            "The drone may sound rough and motors may come down warmer than they should.",
-            "Before chasing tune, check props, motors, frame screws, stack mounting, and filtering.",
-            "Tune direction: calm it down. Do not push D harder until the build is mechanically clean.",
+            "High-frequency noise detected. This usually feels buzzy, harsh, or nervous.",
+            "Why: the gyro is seeing fast vibration, and D-term can amplify that noise.",
+            "Fix: clean the build first, then calm P/D if it still sounds rough.",
         ])
     elif issue == "mid_frequency_vibration":
         base.extend([
-            "This would probably feel shaky or rough instead of smooth and planted.",
-            "It often points to prop/motor/frame vibration getting into the gyro.",
-            "Tune direction: soften the tune slightly and inspect the build before trying to make it sharper.",
+            "Mid-frequency vibration detected. This usually feels shaky or rough instead of planted.",
+            "Why: prop, motor, frame, or stack vibration is likely getting into the gyro.",
+            "Fix: inspect the build and soften P/D slightly if the log stays rough.",
         ])
     elif issue == "low_frequency_oscillation":
         base.extend([
-            "This would probably feel like a slow wobble, bounce, or loose rocking motion.",
-            "The quad is likely correcting too hard and then swinging back the other way.",
-            "Tune direction: make the control loop less aggressive before adding more sharpness.",
+            "Slow wobble detected. This usually feels like bouncing, rocking, or over-correction.",
+            "Why: the control loop may be pushing past the target and swinging back.",
+            "Fix: reduce P first; only add D carefully if the bounce needs damping.",
         ])
     elif issue == "drift_or_weak_hold":
         base.extend([
-            "This would probably feel like the quad does not hold attitude well when throttle changes.",
-            "It may feel like it slowly leans, floats away, or needs constant correction.",
-            "Tune direction: improve hold so it stays more planted through throttle changes.",
+            "Weak hold detected. This usually feels like the quad slowly leans, slips, or needs correction during throttle changes.",
+            "Why: I-term may not be holding attitude strongly enough.",
+            "Fix: raise I a little if the same behavior shows up in flight.",
         ])
     elif issue == "poor_tracking":
         base.extend([
-            "This would probably feel disconnected from your sticks.",
-            "You move the stick, but the quad does not follow cleanly or immediately.",
-            "Tune direction: make the response more direct, but only if the log is clean enough to support it.",
+            "Soft tracking detected. This usually feels like the quad is not connected to your sticks.",
+            "Why: the gyro is not following setpoint tightly enough.",
+            "Fix: add a little P or FF depending on whether it feels soft or delayed.",
         ])
     elif issue == "slow_response":
         base.extend([
-            "This would probably feel lazy, delayed, or floaty even when you are asking it to move.",
-            "The quad is following, but it is late getting there.",
-            "Tune direction: add response carefully instead of making the whole tune aggressive.",
+            "Slow response detected. This usually feels lazy or late when you ask the quad to move.",
+            "Why: the quad follows the command, but not quickly enough.",
+            "Fix: raise FF first, then P only if it still feels soft.",
         ])
     elif issue == "propwash_or_bounceback":
         base.extend([
-            "This is more like dirty-air shake than a normal constant wobble.",
-            "You would usually feel it after throttle chops, split-S moves, dives, hard turns, or recovering from drops.",
-            "The quad may feel okay in clean air, then suddenly shake or bounce when the props hit disturbed air.",
-            "Tune direction: improve damping and propwash handling carefully, not by blindly making the whole tune sharper.",
-            "If the build is mechanically clean, test small D / D Max style changes and check motor temperature right after landing.",
+            "Propwash detected. This is dirty-air shake, not just a normal steady wobble.",
+            "When you feel it: throttle chops, split-S moves, dives, hard turns, drops, or recovering into your own disturbed air.",
+            "Why: the props are hitting turbulent air and the quad is not damping the disturbance fast enough.",
+            "Fix: add damping carefully. On roll/pitch that usually means a small D increase or D Max style help, then check motor temperature.",
         ])
     else:
         base.extend([
             "This log looks mostly clean.",
-            "The quad should already feel fairly predictable.",
-            "Tune direction: make only tiny feel-based changes instead of chasing numbers.",
+            "Fix: do not chase big changes unless you also feel a problem in the air.",
         ])
 
     if goal == "efficient":
-        base.append("Because you picked Efficient, the safest move is keeping the quad smooth, cool, and predictable.")
+        base.append("Because you picked Efficient, keep changes small and avoid heat or twitchiness.")
     elif goal == "locked_in":
-        base.append("Because you picked Locked-In, the goal is a more connected stick feel without making it twitchy or hot.")
+        base.append("Because you picked Locked-In, prioritize stick connection but stop if motors get hot or the quad gets twitchy.")
     elif goal == "floaty":
-        base.append("Because you picked Floaty, the goal is softer movement and less twitch without making it sloppy.")
+        base.append("Because you picked Floaty, keep the tune softer and avoid turning every issue into a sharpness chase.")
 
     return base
 
@@ -417,31 +495,58 @@ def _recommendation_text(axis: str, issue: str, goal: str, delta: Dict[str, floa
     axis_label = axis.upper()
 
     if not valid_for_pid:
-        return f"{axis_label}: I can read the behavior, but this log is not clean enough for confident tuning advice. Retake a better log before trusting changes."
+        return f"{axis_label}: I can see something in the log, but the data is not clean enough to trust tuning advice yet. Retake a cleaner 30–120 second log."
 
-    feel_map = {
-        "high_frequency_noise": f"{axis_label}: This looks like a noisy/harsh axis. In the air it would probably feel buzzy, nervous, or rough instead of smooth.",
-        "mid_frequency_vibration": f"{axis_label}: This looks like vibration getting into the gyro. It would probably feel shaky or unsettled, especially when throttle changes.",
-        "low_frequency_oscillation": f"{axis_label}: This looks like a slower wobble or bounce. It may feel like the quad is over-correcting instead of holding steady.",
-        "drift_or_weak_hold": f"{axis_label}: This looks like weak hold. It may feel like the quad slowly leans or needs extra correction when throttle changes.",
-        "poor_tracking": f"{axis_label}: This looks like soft stick tracking. It may feel like your stick input and the quad are not fully connected.",
-        "slow_response": f"{axis_label}: This looks delayed. It may feel lazy, floaty, or late when you try to snap into a move.",
-        "propwash_or_bounceback": f"{axis_label}: This looks like propwash or bounceback, not just a steady wobble. It likely shows up when the props hit dirty air after throttle chops, drops, hard turns, or recovery moves.",
-        "mostly_clean": f"{axis_label}: This looks mostly clean. Do not chase big changes; tune by feel from here.",
-    }
+    if issue == "propwash_or_bounceback":
+        if axis == "yaw":
+            return (
+                f"{axis_label}: propwash / bounceback behavior detected, but yaw is different. "
+                "Do not solve yaw shake by adding D. Check yaw P/I behavior and only adjust if the quad actually feels loose or shakes on punch-outs."
+            )
+        return (
+            f"{axis_label}: propwash detected. This usually feels like shake after throttle chops, drops, hard turns, or dirty-air recovery. "
+            "The Betaflight-style fix is more damping, so try a small D increase or D Max style help on this axis. "
+            "Do not raise P first; if the bounce is slow or over-correcting, P may need to come down. Check motor heat after every D change."
+        )
 
-    base = feel_map.get(issue, f"{axis_label}: This axis has a behavior worth reviewing by feel.")
+    if issue == "low_frequency_oscillation":
+        return (
+            f"{axis_label}: slow bounce detected. This feels like the quad is rocking or over-correcting. "
+            "Try lowering P a little first. If it still bounces after P is calmer, add D carefully for damping."
+        )
 
-    if goal == "efficient":
-        goal_text = "For an efficient feel, keep it smooth and calm instead of chasing a super sharp response."
-    elif goal == "locked_in":
-        goal_text = "For a locked-in feel, aim for stronger stick connection while watching for heat, twitchiness, or bounceback."
-    elif goal == "floaty":
-        goal_text = "For a floaty feel, soften the response so it flows more, but do not let it become delayed or sloppy."
-    else:
-        goal_text = "Tune this in small steps and judge the next flight by feel."
+    if issue == "mid_frequency_vibration":
+        return (
+            f"{axis_label}: vibration detected. This feels rough or shaky rather than locked in. "
+            "Check props, motors, frame, and stack mounting. If the build is clean, soften P/D slightly."
+        )
 
-    return f"{base} {goal_text}"
+    if issue == "high_frequency_noise":
+        return (
+            f"{axis_label}: high-frequency noise detected. This can sound harsh and heat motors. "
+            "Do not raise D here. Clean mechanical noise first, then reduce D or P if needed."
+        )
+
+    if issue == "drift_or_weak_hold":
+        return (
+            f"{axis_label}: weak hold detected. This feels like the quad slips or drifts through throttle changes. "
+            "Try raising I a little because I-term is what helps hold attitude against outside forces."
+        )
+
+    if issue == "poor_tracking":
+        return (
+            f"{axis_label}: soft tracking detected. This feels disconnected from your sticks. "
+            "Try a little more P for tracking, or a little more FF if it mainly feels delayed."
+        )
+
+    if issue == "slow_response":
+        return (
+            f"{axis_label}: slow response detected. This feels lazy or late. "
+            "Try raising FF first; add P only if it still feels soft after that."
+        )
+
+    return f"{axis_label}: mostly clean. Do not make a PID change unless the flight feel gives you a reason."
+
 
 
 def detect_oscillation(
@@ -537,6 +642,7 @@ def detect_oscillation(
             valid_axis_count += 1
 
         actions = _actions_for_issue(issue, tuning_goal)
+        tuning_moves = _pid_moves_for_issue(axis_name, issue, tuning_goal)
         recommendation_text = _recommendation_text(axis_name, issue, tuning_goal, pid_delta, valid_for_pid)
         feel = _feel_text(issue, tuning_goal)
 
@@ -574,6 +680,7 @@ def detect_oscillation(
             },
             "recommendation_text": recommendation_text,
             "actions": actions,
+            "tuning_moves": tuning_moves,
             "warnings": _warnings_for_goal(tuning_goal),
         }
 
@@ -583,7 +690,8 @@ def detect_oscillation(
             "feel": feel,
             "valid_for_pid": valid_for_pid,
             "confidence": round(confidence, 3),
-            "pid_delta_pct": axes[axis_name]["pid_delta_pct"],
+            "pid_delta_pct": axes[axis_name]["pid_delta_pct"],  # machine/API only; hidden from pilot UI
+            "tuning_moves": tuning_moves,
             "recommendation_text": recommendation_text,
         })
 

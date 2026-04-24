@@ -658,7 +658,7 @@
         </div>
 
         <div style="display:flex; align-items:end;">
-          <button disabled style="opacity:0.65; cursor:not-allowed;">Online Upload Disabled — Run Locally</button>
+          <button id="analyzeButton" onclick="analyzeLog()">Analyze Log</button>
         </div>
       </div>
 
@@ -684,12 +684,12 @@
     </div>
 
     <div class="card">
-      <h2>Axis Review</h2>
+      <h2>Pilot Tune Notes</h2>
       <div id="axisContainer" class="axis-grid"></div>
     </div>
 
     <div class="card">
-      <h2>Manual Notes / Real Value Math</h2>
+      <h2>Copyable Pilot Notes</h2>
       <textarea id="cliBox" readonly></textarea>
     </div>
 
@@ -981,12 +981,9 @@ tuningMode === "efficient" || tuningMode === "locked_in" || tuningMode === "floa
         const axis = axes[key];
         if (!axis) continue;
 
-        const signal = axis.signal || {};
-        const tracking = axis.tracking || {};
-        const pid = axis.pid_delta_pct || {};
         const actions = axis.actions || [];
+        const tuningMoves = axis.tuning_moves || [];
         const warnings = axis.warnings || [];
-        const current = getCurrentPidInputs(key);
 
         const card = document.createElement("div");
         card.className = "axis-card";
@@ -995,38 +992,33 @@ tuningMode === "efficient" || tuningMode === "locked_in" || tuningMode === "floa
           <h3>${axis.axis_name}</h3>
 
           <div class="pill-row">
-            <div class="pill">${safe(axis.issue)}</div>
             <div class="pill">${safe(axis.feel)}</div>
             <div class="pill ${axis.valid_for_pid ? "good" : "warn"}">
-              ${axis.valid_for_pid ? "PID deltas allowed" : "Diagnosis only"}
+              ${axis.valid_for_pid ? "Pilot notes ready" : "Diagnosis only"}
             </div>
           </div>
 
-          <div class="row"><span>Confidence</span><span>${fixed(axis.confidence, 3)}</span></div>
-          <div class="row"><span>Dominant Frequency</span><span>${fixed(signal.dominant_freq_hz, 2, " Hz")}</span></div>
-          <div class="row"><span>Lag</span><span>${fixed(tracking.lag_ms, 2, " ms")}</span></div>
-          <div class="row"><span>Tracking Corr</span><span>${fixed(tracking.corr, 4)}</span></div>
-          <div class="row"><span>Error Ratio</span><span>${fixed(tracking.error_ratio, 4)}</span></div>
-          <div class="row"><span>RMS</span><span>${fixed(signal.rms, 4)}</span></div>
-          <div class="row"><span>Peak-to-Peak</span><span>${fixed(signal.peak_to_peak, 4)}</span></div>
-
-          <div class="section-title">Flight Feel Readout</div>
+          <div class="section-title">Main Read</div>
           <div class="soft-note">${safe(axis.recommendation_text)}</div>
 
-          <div class="section-title">What To Do</div>
+          <div class="section-title">What P / I / D / FF Should Do</div>
+          <ul>${tuningMoves.map(a => `<li>${a}</li>`).join("") || "<li>No PID move suggested from this log.</li>"}</ul>
+
+          <div class="section-title">Why It Feels This Way</div>
           <ul>${actions.map(a => `<li>${a}</li>`).join("") || "<li>No action listed.</li>"}</ul>
 
-          <div class="section-title">Warnings</div>
-          <ul>${warnings.map(w => `<li>${w}</li>`).join("") || "<li>No axis warnings.</li>"}</ul>
+          <div class="section-title">Safety / Watchouts</div>
+          <ul>${warnings.map(w => `<li>${w}</li>`).join("") || "<li>Make one small change, fly again, and check motor heat.</li>"}</ul>
         `;
 
         container.appendChild(card);
       }
     }
 
+
     function renderManualNotes(analysis, tuningMode) {
       const lines = [];
-      lines.push("# AeroTune feel-based tune notes");
+      lines.push("# AeroTune pilot tuning notes");
       lines.push(`# selected_mode: ${prettyMode(tuningMode)}`);
       lines.push(`# summary: ${analysis.summary}`);
       lines.push("");
@@ -1037,9 +1029,14 @@ tuningMode === "efficient" || tuningMode === "locked_in" || tuningMode === "floa
 
         lines.push(`[${axis.axis_name}]`);
         lines.push(`feel = ${axis.feel}`);
-        lines.push(`confidence = ${axis.confidence}`);
         lines.push(`main_read = ${axis.recommendation_text}`);
-        lines.push("what_to_try:");
+        lines.push("");
+        lines.push("what_pid_should_do:");
+        for (const item of (axis.tuning_moves || [])) {
+          lines.push(`- ${item}`);
+        }
+        lines.push("");
+        lines.push("why_it_feels_that_way:");
         for (const item of (axis.actions || [])) {
           lines.push(`- ${item}`);
         }
@@ -1047,12 +1044,14 @@ tuningMode === "efficient" || tuningMode === "locked_in" || tuningMode === "floa
       }
 
       lines.push("Pilot reminder:");
-      lines.push("Use one small change at a time, then fly another clean 30–120 second log.");
-      lines.push("Judge the tune by feel: stick connection, bounceback, propwash, heat, and smoothness.");
-      lines.push("If the motors get hot or the quad sounds rough, back off and check the build.");
+      lines.push("Make one small change at a time, then fly another clean 30–120 second log.");
+      lines.push("For propwash: D can help, but too much D heats motors and can make the quad feel mushy.");
+      lines.push("If motors get hot or the quad sounds rough, back off and check the build.");
 
-      document.getElementById("cliBox").value = lines.join("\n");
+      document.getElementById("cliBox").value = lines.join("
+");
     }
+
 
     async function renderPlots() {
       try {
@@ -1106,6 +1105,31 @@ tuningMode === "efficient" || tuningMode === "locked_in" || tuningMode === "floa
         console.warn(err);
       }
     }
+
+    
+    function applyHostedDemoMode() {
+      const isLocal =
+        window.location.hostname === "127.0.0.1" ||
+        window.location.hostname === "localhost";
+
+      const button = document.getElementById("analyzeButton");
+
+      if (!button) return;
+
+      if (isLocal) {
+        button.disabled = false;
+        button.style.opacity = "1";
+        button.style.cursor = "pointer";
+        button.textContent = "Analyze Log";
+      } else {
+        button.disabled = true;
+        button.style.opacity = "0.65";
+        button.style.cursor = "not-allowed";
+        button.textContent = "Online Upload Disabled — Run Locally";
+      }
+    }
+
+    applyHostedDemoMode();
 
     document.getElementById("tuningMode").addEventListener("change", updateModeWarning);
     updateModeWarning();
