@@ -137,10 +137,22 @@ AeroTune/
 
 ## 📜 License
 
-Apache 2.0 — free to use, modify, and build on with attribution.
-
+Apache 2.0 
+- Free to use
+- Free to modify
+- Open for collaboration
+- Attribution required
 ---
 
+## 🤝 Contributions
+
+Contributions are welcome.
+
+If you're interested in improving AeroTune or collaborating on advanced tuning logic, feel free to open a PR or reach out.
+
+## 💡 Future Plans
+
+AeroTune may expand into a hosted platform with additional features and advanced tuning capabilities.
 ## 👤 Author
 
 Built by Christopher Bostrom  
