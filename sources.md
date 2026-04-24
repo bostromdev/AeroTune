@@ -1,96 +1,48 @@
-# AeroTune Sources & PID Rule Basis
+# AeroTune Sources & Tuning References
 
-AeroTune recommendations are based on Betaflight tuning principles and conservative FPV tuning practice.
+AeroTune uses conservative, Betaflight-style tuning rules. It does not output final PID numbers. It outputs small percentage deltas and pilot-facing explanations.
 
-## Primary Reference
+## Primary source
 
-- Betaflight PID Tuning Guide: https://betaflight.com/docs/wiki/guides/current/PID-Tuning-Guide
+- Betaflight PID Tuning Guide  
+  https://betaflight.com/docs/wiki/guides/current/PID-Tuning-Guide
 
-## Rules Used In The Analyzer
+## Rules implemented
 
 ### P — Proportional
-- P controls how tightly the quad tracks the sticks / setpoint.
-- Higher P feels sharper.
-- Too much P can cause overshoot, bounce, or oscillation.
-- Too little P can feel soft, loose, or sloppy.
+- Used for tracking and authority.
+- More P feels sharper.
+- Too much P can overshoot or oscillate.
+- AeroTune raises P only for soft tracking / poor authority.
+- AeroTune lowers P for slow bounce, over-correction, and high-throttle oscillation.
 
 ### I — Integral
-- I helps the quad hold attitude against wind, CG imbalance, and throttle changes.
-- If the quad drifts, slips, or does not hold angle/heading through throttle changes, raise I slightly.
-- Too much I can feel stiff, robotic, or slow.
+- Used for attitude hold against wind, CG bias, and throttle changes.
+- AeroTune raises I for weak hold / drift.
+- AeroTune avoids changing I for noise, propwash, or simple stick-response problems.
 
-### D — Derivative / Damping
-- D damps motion, bounceback, and propwash.
-- D is useful when roll/pitch has bounceback or propwash.
-- D amplifies gyro noise and can heat motors, so changes must be small.
-- If the signal is noisy or motors are hot, lower D or improve filtering/mechanical condition.
+### D — Derivative / damping
+- Used for damping bounceback and propwash.
+- D can amplify gyro noise and heat motors.
+- AeroTune raises D only for roll/pitch propwash or bounceback.
+- AeroTune lowers or avoids D for high-frequency noise, vibration, or warm/rough motors.
+- AeroTune always warns to check motor temperature after increasing D.
 
-### Feedforward — FF
-- FF improves stick response.
-- Raise FF when the quad follows the command but feels delayed.
-- FF is not the first fix for vibration, propwash, or drift.
+### Feedforward
+- Used for stick response.
+- AeroTune raises FF for delayed/soft stick response.
+- AeroTune does not use FF to solve noise, drift, or propwash.
 
 ### Yaw
-- Yaw D normally stays at 0.
-- Tune yaw mainly with P, I, and FF.
-- If yaw gets rough at high throttle or fast forward flight, lower yaw P slightly.
-- If yaw does not hold heading during throttle changes, raise yaw I slightly.
+- Yaw D normally stays 0.
+- AeroTune keeps yaw D at 0 and tunes yaw with P/I/FF only.
 
-## Analyzer Outcomes
+## CSV Optimizer
 
-### Clean Tune
-Output:
-> No PID change needed.
+The optimizer converts common Blackbox CSV names into AeroTune's canonical format:
 
-Used when tracking is clean, error is low, and there is no throttle-linked disturbance.
+```text
+time, gyro_x, gyro_y, gyro_z, setpoint_roll, setpoint_pitch, setpoint_yaw, throttle
+```
 
-### Mostly Clean
-Output:
-> No required fix. Optional feel tuning only.
-
-Used when no strong problem is detected, but the user selected a feel goal.
-
-### Propwash / Bounceback
-Output:
-> Raise D slightly on roll/pitch. Do not raise P first. Check motor heat.
-
-Used when tracking error rises during active throttle or disturbed-air sections.
-
-### Yaw Throttle Roughness
-Output:
-> Keep yaw D at 0. Lower yaw P slightly if roughness appears at throttle. Raise yaw I only if heading hold is weak.
-
-### High-Frequency Noise
-Output:
-> Lower D or do not raise D. Check mechanical noise.
-
-### Mid-Frequency Vibration
-Output:
-> Check mechanical vibration first. Lower P/D slightly only if the build is clean.
-
-### High-Throttle Oscillation
-Output:
-> Lower P slightly. Consider TPA later if the problem only appears at high throttle.
-
-### Low-Frequency Oscillation / Loose Bounce
-Output:
-> Lower P first. Leave D alone unless bounceback/propwash remains.
-
-### Weak Hold / Drift
-Output:
-> Raise I slightly.
-
-### Soft Tracking
-Output:
-> Raise P slightly, or FF if the main issue is delayed stick feel.
-
-### Slow Stick Response
-Output:
-> Raise FF first. Add P only if it still feels soft.
-
-## Safety
-
-- Make one small change at a time.
-- Check motor temperature after raising D.
-- Fix mechanical vibration before increasing D.
-- Do not change PID on a clean tune unless the pilot wants a different feel.
+This makes user logs easier to share, test, and compare.

@@ -5,108 +5,157 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AeroTune</title>
   <style>
-    body { margin: 0; font-family: Arial, sans-serif; background: #081020; color: #edf4ff; }
-    main { max-width: 1100px; margin: 0 auto; padding: 28px; }
-    .card { background: #111b33; border: 1px solid #26395f; border-radius: 18px; padding: 20px; margin: 16px 0; }
-    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-    label { display: block; margin: 12px 0 6px; color: #bfd0ff; }
-    input, select, button { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 10px; border: 1px solid #324a7a; background: #0b1428; color: #edf4ff; }
-    button { margin-top: 16px; background: #4b7cff; border: 0; font-weight: 700; cursor: pointer; }
-    .axis { background: #0b1428; border: 1px solid #26395f; border-radius: 16px; padding: 16px; }
+    :root {
+      --bg: #071020;
+      --card: #111b33;
+      --card2: #0b1428;
+      --border: #26395f;
+      --text: #edf4ff;
+      --muted: #bdd0ff;
+      --blue: #4b7cff;
+      --warn: #ffd38a;
+      --good: #9dffbf;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; background: var(--bg); color: var(--text); }
+    main { max-width: 1220px; margin: 0 auto; padding: 28px; }
+    h1, h2, h3 { margin-top: 0; }
+    .layout { display: grid; grid-template-columns: 1.45fr 0.85fr; gap: 16px; align-items: start; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 20px; margin: 16px 0; }
+    .axis-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    label { display: block; margin: 12px 0 6px; color: var(--muted); }
+    input, select, button { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #324a7a; background: var(--card2); color: var(--text); font-size: 15px; }
+    button { margin-top: 16px; background: var(--blue); border: 0; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #26395f; }
+    a.button { display: inline-block; width: 100%; margin-top: 12px; text-align: center; padding: 12px; border-radius: 10px; color: white; background: #26395f; text-decoration: none; font-weight: 700; }
+    .axis { background: var(--card2); border: 1px solid var(--border); border-radius: 16px; padding: 16px; }
     .badge { display: inline-block; border-radius: 999px; padding: 5px 10px; background: #26395f; color: #cfe0ff; font-size: 13px; }
-    .warn { color: #ffd38a; }
-    .move { font-weight: 700; font-size: 17px; }
-    .clean { color: #a9ffca; font-weight: 700; }
-    pre { white-space: pre-wrap; background: #050914; border-radius: 12px; padding: 14px; overflow: auto; }
-    @media (max-width: 850px) { .grid { grid-template-columns: 1fr; } }
+    .warn { color: var(--warn); }
+    .good { color: var(--good); }
+    .move { font-weight: 700; font-size: 17px; margin: 10px 0; }
+    .small { color: var(--muted); font-size: 14px; line-height: 1.35; }
+    pre { white-space: pre-wrap; background: #050914; border-radius: 12px; padding: 14px; overflow: auto; max-height: 520px; }
+    ul { padding-left: 20px; }
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      .axis-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
 <main>
   <h1>⚡ AeroTune</h1>
-  <p>Betaflight-style FPV PID advice with simple feel-based recommendations.</p>
+  <p>Simple Betaflight-style FPV PID advice plus an AeroTune-ready CSV optimizer.</p>
 
-  <section class="card">
-    <h2>Upload & Tune Goal</h2>
-    <form id="uploadForm">
-      <label>CSV Log File</label>
-      <input id="file" name="file" type="file" accept=".csv" required />
+  <div class="layout">
+    <section>
+      <section class="card">
+        <h2>Analyze Blackbox CSV</h2>
+        <form id="uploadForm">
+          <label>CSV Log File</label>
+          <input id="file" name="file" type="file" accept=".csv" required />
 
-      <label>Drone Size</label>
-      <select id="drone_size" name="drone_size">
-        <option value="7" selected>7 inch</option>
-        <option value="5">5 inch</option>
-      </select>
+          <label>Drone Size</label>
+          <select id="drone_size" name="drone_size">
+            <option value="7" selected>7 inch</option>
+            <option value="5">5 inch</option>
+          </select>
 
-      <label>Tune Goal</label>
-      <select id="tuning_goal" name="tuning_goal">
-        <option value="efficient" selected>Efficient / Smooth</option>
-        <option value="locked_in">Locked-In / Responsive</option>
-        <option value="floaty">Floaty / Cinematic</option>
-      </select>
+          <label>Tune Goal</label>
+          <select id="tuning_goal" name="tuning_goal">
+            <option value="efficient" selected>Efficient / Smooth</option>
+            <option value="locked_in">Locked-In / Responsive</option>
+            <option value="floaty">Floaty / Cinematic</option>
+          </select>
 
-      <button type="submit">Analyze Log</button>
-    </form>
-  </section>
+          <button type="submit">Analyze Log</button>
+        </form>
+      </section>
 
-  <section class="card">
-    <h2>Summary</h2>
-    <div id="summary">Waiting for upload.</div>
-  </section>
+      <section class="card">
+        <h2>Summary</h2>
+        <div id="summary">Waiting for upload.</div>
+        <a id="downloadOptimized" class="button" href="/download-optimized" style="display:none;">Download Optimized CSV From This Log</a>
+      </section>
 
-  <section class="card">
-    <h2>Pilot Tune Notes</h2>
-    <div id="axes" class="grid"></div>
-  </section>
+      <section class="card">
+        <h2>Pilot Tune Notes</h2>
+        <div id="axes" class="axis-grid"></div>
+      </section>
+    </section>
 
-  <section class="card">
-    <h2>Copyable Pilot Notes</h2>
-    <pre id="copyNotes">No analysis yet.</pre>
-  </section>
+    <aside>
+      <section class="card">
+        <h2>CSV Optimizer</h2>
+        <p class="small">Use this to convert messy CSV exports into AeroTune-ready format:</p>
+        <pre class="small">time, gyro_x, gyro_y, gyro_z, setpoint_roll, setpoint_pitch, setpoint_yaw, throttle</pre>
 
-  <section class="card">
-    <h2>Machine Output</h2>
-    <pre id="raw">No analysis yet.</pre>
-  </section>
+        <form id="optimizerForm">
+          <label>CSV File To Optimize</label>
+          <input id="optimizerFile" type="file" accept=".csv" required />
+          <button class="secondary" type="submit">Download Optimized CSV</button>
+        </form>
+
+        <p id="optimizerStatus" class="small">No optimizer job yet.</p>
+      </section>
+
+      <section class="card">
+        <h2>Copyable Notes</h2>
+        <pre id="copyNotes">No analysis yet.</pre>
+      </section>
+
+      <section class="card">
+        <h2>Machine Output</h2>
+        <pre id="raw">No analysis yet.</pre>
+      </section>
+    </aside>
+  </div>
 </main>
 
 <script>
 const form = document.getElementById("uploadForm");
+const optimizerForm = document.getElementById("optimizerForm");
 const summary = document.getElementById("summary");
 const axes = document.getElementById("axes");
 const raw = document.getElementById("raw");
 const copyNotes = document.getElementById("copyNotes");
+const downloadOptimized = document.getElementById("downloadOptimized");
+const optimizerStatus = document.getElementById("optimizerStatus");
 
 function percentMove(value) {
   const n = Number(value || 0) * 100;
-  if (Math.abs(n) < 0.05) return "";
+  if (Math.abs(n) < 0.05) return "0%";
   return `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
 }
 
 function deltaText(delta) {
   const parts = [];
-  const p = percentMove(delta?.p);
-  const i = percentMove(delta?.i);
-  const d = percentMove(delta?.d);
-  const ff = percentMove(delta?.ff);
-
-  if (p) parts.push(`P ${p}`);
-  if (i) parts.push(`I ${i}`);
-  if (d) parts.push(`D ${d}`);
-  if (ff) parts.push(`FF ${ff}`);
-
+  if (Math.abs(delta?.p || 0) > 0.0001) parts.push(`P ${percentMove(delta.p)}`);
+  if (Math.abs(delta?.i || 0) > 0.0001) parts.push(`I ${percentMove(delta.i)}`);
+  if (Math.abs(delta?.d || 0) > 0.0001) parts.push(`D ${percentMove(delta.d)}`);
+  if (Math.abs(delta?.ff || 0) > 0.0001) parts.push(`FF ${percentMove(delta.ff)}`);
   return parts.length ? parts.join(" / ") : "No PID change";
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
 function render(data) {
   const analysis = data.analysis;
+  const statusClass = analysis.summary.toLowerCase().includes("clean") ? "good" : "warn";
 
   summary.innerHTML = `
-    <p><strong>${analysis.summary}</strong></p>
-    <p>Goal: ${analysis.tuning_goal || "efficient"} | Drone: ${analysis.drone_size}" | Log: ${analysis.duration_s}s @ ${analysis.sample_rate_hz}Hz</p>
-    ${(analysis.global_actions || []).map(a => `<p>• ${a}</p>`).join("")}
-    ${(analysis.warnings || []).map(w => `<p class="warn">⚠️ ${w}</p>`).join("")}
+    <p class="${statusClass}"><strong>${escapeHtml(analysis.summary)}</strong></p>
+    <p>Goal: ${escapeHtml(analysis.tuning_goal)} | Drone: ${escapeHtml(analysis.drone_size)}" | Log: ${analysis.duration_s}s @ ${analysis.sample_rate_hz}Hz</p>
+    ${(analysis.global_actions || []).map(a => `<p>• ${escapeHtml(a)}</p>`).join("")}
+    ${(analysis.warnings || []).map(w => `<p class="warn">⚠️ ${escapeHtml(w)}</p>`).join("")}
   `;
+
+  downloadOptimized.style.display = data.optimized_available ? "inline-block" : "none";
 
   axes.innerHTML = "";
   const notes = [];
@@ -116,31 +165,30 @@ function render(data) {
     if (!axis) continue;
 
     const moves = deltaText(axis.pid_delta_pct);
-    const isClean = axis.issue === "clean_tune";
 
     notes.push(`[${axis.axis_name}]`);
-    notes.push(`Outcome: ${axis.feel}`);
+    notes.push(`Outcome: ${axis.issue_label}${axis.propwash_detected ? " (PROPWASH DETECTED)" : ""}`);
     notes.push(`Change: ${moves}`);
+    notes.push(`Why: ${axis.confidence_reason}`);
     notes.push(axis.recommendation_text);
     for (const move of axis.tuning_moves || []) notes.push(`- ${move}`);
-    notes.push(`Confidence: ${axis.confidence}`);
-    if (axis.confidence_reason) notes.push(`Reason: ${axis.confidence_reason}`);
     notes.push("");
 
     const div = document.createElement("div");
     div.className = "axis";
-    div.innerHTML = `
-      <span class="badge">${axis.axis_name}</span>
-      <h3 class="${isClean ? "clean" : ""}">${axis.feel}</h3>
-      ${axis.propwash_detected ? `<p class="warn"><strong>Propwash detected</strong></p>` : ""}
-      <p class="move">${moves}</p>
-      <p>${axis.recommendation_text}</p>
-      <p><strong>What to try:</strong></p>
-      <ul>${(axis.tuning_moves || []).map(m => `<li>${m}</li>`).join("")}</ul>
-      <p><strong>Confidence:</strong> ${axis.confidence}</p>
-      ${axis.confidence_reason ? `<p><strong>Reason:</strong> ${axis.confidence_reason}</p>` : ""}
-    `;
+    const cleanClass = axis.issue === "clean" ? "good" : "warn";
 
+    div.innerHTML = `
+      <span class="badge">${escapeHtml(axis.axis_name)}</span>
+      <h3 class="${cleanClass}">${escapeHtml(axis.issue_label)}</h3>
+      ${axis.propwash_detected ? `<p class="warn"><strong>Propwash detected</strong></p>` : ""}
+      <p class="move">${escapeHtml(moves)}</p>
+      <p>${escapeHtml(axis.recommendation_text)}</p>
+      <p class="small"><strong>Reason:</strong> ${escapeHtml(axis.confidence_reason)}</p>
+      <p><strong>What to try:</strong></p>
+      <ul>${(axis.tuning_moves || []).map(m => `<li>${escapeHtml(m)}</li>`).join("")}</ul>
+      <p><strong>Confidence:</strong> ${axis.confidence}</p>
+    `;
     axes.appendChild(div);
   }
 
@@ -155,9 +203,16 @@ form.addEventListener("submit", async (event) => {
   axes.innerHTML = "";
   raw.textContent = "";
   copyNotes.textContent = "";
+  downloadOptimized.style.display = "none";
+
+  const fileInput = document.getElementById("file");
+  if (!fileInput.files.length) {
+    summary.innerHTML = `<p class="warn">Choose a CSV first.</p>`;
+    return;
+  }
 
   const formData = new FormData();
-  formData.append("file", document.getElementById("file").files[0]);
+  formData.append("file", fileInput.files[0]);
   formData.append("drone_size", document.getElementById("drone_size").value);
   formData.append("tuning_goal", document.getElementById("tuning_goal").value);
 
@@ -165,12 +220,52 @@ form.addEventListener("submit", async (event) => {
   const data = await response.json();
 
   if (!response.ok) {
-    summary.innerHTML = `<p class="warn">${data.error || "Upload failed."}</p>`;
+    summary.innerHTML = `<p class="warn">${escapeHtml(data.error || "Upload failed.")}</p>`;
     raw.textContent = JSON.stringify(data, null, 2);
     return;
   }
 
   render(data);
+});
+
+optimizerForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const fileInput = document.getElementById("optimizerFile");
+  if (!fileInput.files.length) {
+    optimizerStatus.textContent = "Choose a CSV first.";
+    return;
+  }
+
+  optimizerStatus.textContent = "Optimizing...";
+
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+
+  const response = await fetch("/optimize-log", { method: "POST", body: formData });
+
+  if (!response.ok) {
+    let message = "Optimizer failed.";
+    try {
+      const data = await response.json();
+      message = data.error || message;
+    } catch (_) {}
+    optimizerStatus.textContent = message;
+    return;
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const baseName = fileInput.files[0].name.replace(/\.csv$/i, "");
+  a.href = url;
+  a.download = `${baseName}_aerotune_ready.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+
+  optimizerStatus.textContent = "Optimized CSV downloaded.";
 });
 </script>
 </body>

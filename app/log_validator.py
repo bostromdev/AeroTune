@@ -1,179 +1,60 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
 
 
-REQUIRED_KEYWORDS = {
-    "time": ["time", "timestamp"],
-    "gyro": ["gyro", "gyr"],
-    "throttle": ["throttle", "thr"],
-}
-
-
-def _find_column(df: pd.DataFrame, keywords: list[str]) -> str | None:
-    for col in df.columns:
-        clean = str(col).lower().strip()
-        if any(key in clean for key in keywords):
-            return str(col)
-    return None
-
-
-def _find_columns(df: pd.DataFrame, keywords: list[str]) -> list[str]:
-    cols: list[str] = []
-    for col in df.columns:
-        clean = str(col).lower().strip()
-        if any(key in clean for key in keywords):
-            cols.append(str(col))
-    return cols
-
-
-def _duration_seconds(time_values: pd.Series) -> float | None:
-    values = pd.to_numeric(time_values, errors="coerce").dropna()
-    if len(values) < 3:
-        return None
-
-    duration = float(values.max() - values.min())
-    if not np.isfinite(duration) or duration <= 0:
-        return None
-
-    # Betaflight exports commonly use microseconds. Some cleaned CSVs use seconds.
-    if duration > 10_000:
-        return duration / 1_000_000.0
-    return duration
-
-
-def validate_log(df: pd.DataFrame) -> dict[str, Any]:
-    """
-    Validate FPV Blackbox CSV quality before PID analysis.
-
-    The validator is intentionally conservative. It does not tune the craft;
-    it only decides whether the input data is trustworthy enough to analyze.
-    """
-
-    issues: list[str] = []
-    warnings: list[str] = []
-    score = 100
-    duration_s: float | None = None
+def validate_log(df: pd.DataFrame) -> Dict[str, Any]:
+    warnings: List[str] = []
 
     if df is None or df.empty:
+        return {"valid": False, "warnings": ["CSV is empty."], "rows": 0}
+
+    rows = int(len(df))
+    columns = list(df.columns)
+
+    required = ["time", "gyro_x", "gyro_y", "gyro_z"]
+    missing = [col for col in required if col not in df.columns]
+
+    if missing:
         return {
             "valid": False,
-            "score": 0,
-            "grade": "F",
-            "duration_s": None,
-            "issues": ["CSV is empty or unreadable."],
-            "warnings": [],
-            "summary": "Invalid log: no usable data found.",
+            "warnings": [f"Missing required columns: {', '.join(missing)}"],
+            "rows": rows,
+            "columns": columns,
         }
 
-    working = df.copy()
-    working.columns = [str(c).strip().lower() for c in working.columns]
+    time = pd.to_numeric(df["time"], errors="coerce").to_numpy(dtype=float)
+    finite = np.isfinite(time)
 
-    time_col = _find_column(working, REQUIRED_KEYWORDS["time"])
-    gyro_cols = _find_columns(working, REQUIRED_KEYWORDS["gyro"])
-    throttle_col = _find_column(working, REQUIRED_KEYWORDS["throttle"])
+    if finite.mean() < 0.95:
+        warnings.append("Some timestamps are invalid.")
 
-    if time_col is None:
-        issues.append("Missing time/timestamp column.")
-        score -= 25
-
-    if not gyro_cols:
-        issues.append("Missing gyro data columns.")
-        score -= 35
-
-    if throttle_col is None:
-        warnings.append("Missing throttle column; flight variation confidence is reduced.")
-        score -= 15
-
-    row_count = len(working)
-    if row_count < 1000:
-        issues.append("Log is too short for reliable PID analysis.")
-        score -= 25
-    elif row_count < 5000:
-        warnings.append("Log is usable but short. Longer logs improve accuracy.")
-        score -= 10
-
-    if time_col is not None:
-        duration_s = _duration_seconds(working[time_col])
-        if duration_s is None:
-            warnings.append("Time column exists but could not be reliably parsed.")
-            score -= 10
-        elif duration_s < 10:
-            issues.append("Flight duration is under 10 seconds.")
-            score -= 25
-        elif duration_s < 30:
-            warnings.append("Flight duration is under 30 seconds; 30–120 seconds is preferred.")
-            score -= 10
-
-    if throttle_col is not None:
-        throttle = pd.to_numeric(working[throttle_col], errors="coerce").dropna()
-        if len(throttle) > 10:
-            throttle_variance = float(np.std(throttle))
-            if throttle_variance < 5:
-                warnings.append("Throttle variation is very low; log may be hover-only.")
-                score -= 20
-            elif throttle_variance < 15:
-                warnings.append("Throttle variation is limited; include punch-outs and turns.")
-                score -= 10
+    if len(time) >= 2:
+        dt = np.diff(time)
+        good_dt = dt[np.isfinite(dt) & (dt > 0)]
+        if len(good_dt):
+            sample_rate_hz = float(1.0 / np.median(good_dt))
+            duration_s = float(time[-1] - time[0])
         else:
-            warnings.append("Throttle data could not be reliably parsed.")
-            score -= 10
-
-    if gyro_cols:
-        gyro_penalty = 0
-        usable_gyro_cols = gyro_cols[:3]
-        for col in usable_gyro_cols:
-            values = pd.to_numeric(working[col], errors="coerce")
-            numeric = values.dropna()
-            if numeric.empty:
-                gyro_penalty += 10
-                continue
-            if float(values.isna().mean()) > 0.2:
-                gyro_penalty += 10
-            if float(np.std(numeric)) == 0:
-                gyro_penalty += 15
-
-        if gyro_penalty:
-            warnings.append("Gyro signal quality appears weak or incomplete.")
-            score -= gyro_penalty
-
-    score = max(0, min(100, int(score)))
-
-    if score >= 90:
-        grade = "A"
-    elif score >= 80:
-        grade = "B"
-    elif score >= 70:
-        grade = "C"
-    elif score >= 60:
-        grade = "D"
+            sample_rate_hz = None
+            duration_s = None
+            warnings.append("Timestamps are not increasing.")
     else:
-        grade = "F"
+        sample_rate_hz = None
+        duration_s = None
+        warnings.append("Not enough rows to estimate sample rate.")
 
-    hard_failure = any(
-        "missing gyro" in issue.lower()
-        or "empty" in issue.lower()
-        or "unreadable" in issue.lower()
-        for issue in issues
-    )
-    valid = score >= 70 and not hard_failure
-
-    if score >= 85:
-        summary = "Excellent log quality. Suitable for PID analysis."
-    elif score >= 70:
-        summary = "Usable log. Analysis can run, but better flight data may improve accuracy."
-    else:
-        summary = "Poor log quality. Retake the flight before trusting PID recommendations."
+    if rows < 128:
+        warnings.append("Log is very short. Use a longer log for safer tuning advice.")
 
     return {
-        "valid": valid,
-        "score": score,
-        "grade": grade,
-        "duration_s": round(duration_s, 3) if duration_s is not None else None,
-        "issues": issues,
+        "valid": len(warnings) == 0 or all("short" not in w.lower() for w in warnings),
         "warnings": warnings,
-        "summary": summary,
+        "rows": rows,
+        "columns": columns,
+        "sample_rate_hz": None if sample_rate_hz is None else round(sample_rate_hz, 2),
+        "duration_s": None if duration_s is None else round(duration_s, 3),
     }
