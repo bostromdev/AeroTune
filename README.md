@@ -88,6 +88,41 @@ This gives AeroTune a better chance to identify real issues like propwash, bounc
 
 ---
 
+## How to Export Your Blackbox CSV
+
+AeroTune analyzes **CSV files**, not raw `.BBL`, `.BFL`, or `.TXT` Blackbox logs directly.
+
+The easiest beginner workflow is:
+
+1. Open **Betaflight Blackbox Explorer**.
+2. Click **Open log file/video**.
+3. Select your Blackbox log file from your flight controller, SD card, or computer.
+4. Pick the correct flight/log inside the file if the file contains multiple logs.
+5. Use **Export CSV**.
+6. Save the exported `.csv` file somewhere easy to find.
+7. Upload that `.csv` into AeroTune.
+
+Recommended naming style:
+
+```text
+7inch_6s_90s_smooth_punches_before.csv
+7inch_6s_90s_smooth_punches_after.csv
+```
+
+Keep the original Blackbox log too. The CSV is for AeroTune, but the raw log is still useful if you need to reopen it in Blackbox Explorer later.
+
+Best CSV export checklist:
+
+- Export the same flight you want AeroTune to analyze.
+- Prefer a 60–90 second test flight.
+- Avoid exporting crash-only logs unless you are diagnosing a crash.
+- Name the file clearly so you know the drone size, battery, test type, and whether it was before or after a tune change.
+- If the exported CSV is too large for a hosted demo, run AeroTune locally.
+
+Advanced users can also use command-line Blackbox tools to decode supported logs into CSV, but beginners should start with Betaflight Blackbox Explorer.
+
+---
+
 ## Features
 
 - Upload FPV Blackbox CSV logs
