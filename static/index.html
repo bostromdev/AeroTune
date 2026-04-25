@@ -297,7 +297,62 @@
       .axis-grid { grid-template-columns: 1fr; }
       .problem-grid, .split { grid-template-columns: 1fr; }
     }
-  </style>
+  
+
+/* ================================
+   AeroTune Betaflight PID % Calculator
+   Converts analyzer percent changes into actual Betaflight PID values.
+   ================================ */
+
+.pid-percent-calculator {
+  margin-top: 18px;
+}
+
+.pid-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.pid-axis-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.pid-axis-card h3 {
+  margin: 0 0 12px;
+}
+
+.pid-axis-card label {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 10px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+.pid-axis-card input {
+  width: 100%;
+  min-height: 36px;
+}
+
+.machine-box {
+  margin-top: 14px;
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  line-height: 1.45;
+}
+
+@media (max-width: 820px) {
+  .pid-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+</style>
 </head>
 <body>
 <header>
@@ -405,6 +460,55 @@ setpoint_roll, setpoint_pitch, setpoint_yaw, throttle</pre>
       </div>
     </section>
   </section>
+
+
+<section class="panel pid-percent-calculator" id="pid-percent-calculator">
+  <div class="section-head">
+    <div>
+      <p class="eyebrow">Betaflight Output</p>
+      <h2>% Calculator</h2>
+      <p class="muted">
+        Enter your current Betaflight PID values. AeroTune converts the recommended percentage changes
+        into the actual PID numbers you should type into Betaflight.
+      </p>
+    </div>
+  </div>
+
+  <div class="pid-grid">
+    <div class="pid-axis-card">
+      <h3>ROLL</h3>
+      <label>P <input id="roll-p" type="number" min="0" max="250" step="1" value="57"></label>
+      <label>I <input id="roll-i" type="number" min="0" max="250" step="1" value="45"></label>
+      <label>D <input id="roll-d" type="number" min="0" max="250" step="1" value="30"></label>
+      <label>FF <input id="roll-ff" type="number" min="0" max="250" step="1" value="100"></label>
+    </div>
+
+    <div class="pid-axis-card">
+      <h3>PITCH</h3>
+      <label>P <input id="pitch-p" type="number" min="0" max="250" step="1" value="60"></label>
+      <label>I <input id="pitch-i" type="number" min="0" max="250" step="1" value="50"></label>
+      <label>D <input id="pitch-d" type="number" min="0" max="250" step="1" value="32"></label>
+      <label>FF <input id="pitch-ff" type="number" min="0" max="250" step="1" value="100"></label>
+    </div>
+
+    <div class="pid-axis-card">
+      <h3>YAW</h3>
+      <label>P <input id="yaw-p" type="number" min="0" max="250" step="1" value="60"></label>
+      <label>I <input id="yaw-i" type="number" min="0" max="250" step="1" value="45"></label>
+      <label>D <input id="yaw-d" type="number" min="0" max="250" step="1" value="0"></label>
+      <label>FF <input id="yaw-ff" type="number" min="0" max="250" step="1" value="100"></label>
+    </div>
+  </div>
+
+  <div class="button-row" style="margin-top: 14px;">
+    <button type="button" id="calculate-pid-values">Calculate Betaflight Values</button>
+  </div>
+
+  <div id="pid-calculator-output" class="machine-box">
+    Run an analysis first, then enter your current Betaflight PIDs.
+  </div>
+</section>
+
 </main>
 
 <script>
@@ -585,5 +689,198 @@ document.querySelectorAll(".tab").forEach(tab => {
   });
 });
 </script>
+
+
+<script>
+/* ================================
+   AeroTune Betaflight PID % Calculator
+   Frontend-only. Does not change analyzer, parser, or backend logic.
+   ================================ */
+
+(function () {
+  "use strict";
+
+  window.latestAeroTuneAnalysis = window.latestAeroTuneAnalysis || null;
+
+  function clampPidValue(value) {
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(250, Math.round(value)));
+  }
+
+  function readPidInput(axis, term) {
+    const el = document.getElementById(`${axis}-${term}`);
+    if (!el) return 0;
+
+    const value = Number(el.value);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function normalizeDeltaToPercent(rawDelta) {
+    if (rawDelta === null || rawDelta === undefined) return 0;
+
+    const value = Number(rawDelta);
+    if (!Number.isFinite(value)) return 0;
+
+    if (Math.abs(value) <= 1) {
+      return value * 100;
+    }
+
+    return value;
+  }
+
+  function extractAxisDelta(axisPayload, term) {
+    if (!axisPayload || typeof axisPayload !== "object") return 0;
+
+    const possibleContainers = [
+      axisPayload.pid_delta_pct,
+      axisPayload.pidPercentDelta,
+      axisPayload.pid_pct_delta,
+      axisPayload.pid_pct_deltas,
+      axisPayload.pid_delta,
+      axisPayload.pid_deltas,
+      axisPayload.delta,
+      axisPayload.deltas,
+      axisPayload.recommended_delta,
+      axisPayload.recommended_deltas,
+      axisPayload.percent_delta,
+      axisPayload.percent_deltas,
+      axisPayload.pid_percent_delta,
+      axisPayload.pid_percent_deltas,
+      axisPayload.recommended_pid_delta,
+      axisPayload.recommended_pid_deltas
+    ];
+
+    for (const container of possibleContainers) {
+      if (container && Object.prototype.hasOwnProperty.call(container, term)) {
+        return normalizeDeltaToPercent(container[term]);
+      }
+
+      if (container && Object.prototype.hasOwnProperty.call(container, term.toUpperCase())) {
+        return normalizeDeltaToPercent(container[term.toUpperCase()]);
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(axisPayload, term)) {
+      return normalizeDeltaToPercent(axisPayload[term]);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(axisPayload, term.toUpperCase())) {
+      return normalizeDeltaToPercent(axisPayload[term.toUpperCase()]);
+    }
+
+    return 0;
+  }
+
+  function getAnalysisAxes() {
+    const data = window.latestAeroTuneAnalysis;
+
+    if (!data) return null;
+
+    if (data.axes && typeof data.axes === "object") return data.axes;
+    if (data.analysis && data.analysis.axes && typeof data.analysis.axes === "object") return data.analysis.axes;
+    if (data.result && data.result.axes && typeof data.result.axes === "object") return data.result.axes;
+
+    if (data.roll || data.pitch || data.yaw) return data;
+
+    return null;
+  }
+
+  function applyPercentChange(currentValue, percentChange, axis, term) {
+    if (axis === "yaw" && term === "d") {
+      return 0;
+    }
+
+    const nextValue = currentValue * (1 + percentChange / 100);
+    return clampPidValue(nextValue);
+  }
+
+  function calculateBetaflightPidValues() {
+    const output = document.getElementById("pid-calculator-output");
+    if (!output) return;
+
+    const axesPayload = getAnalysisAxes();
+
+    if (!axesPayload) {
+      output.textContent =
+        "Run an AeroTune analysis first. Then this will convert the recommended % changes into Betaflight PID numbers.";
+      return;
+    }
+
+    const axes = ["roll", "pitch", "yaw"];
+    const terms = ["p", "i", "d", "ff"];
+    const lines = [];
+
+    lines.push("BETAFLIGHT PID VALUE CALCULATOR");
+    lines.push("Uses your current Betaflight PIDs + AeroTune recommended percent changes.");
+    lines.push("");
+
+    for (const axis of axes) {
+      const axisPayload =
+        axesPayload[axis] ||
+        axesPayload[axis.toUpperCase()] ||
+        axesPayload[axis.charAt(0).toUpperCase() + axis.slice(1)] ||
+        {};
+
+      lines.push(axis.toUpperCase());
+
+      for (const term of terms) {
+        const currentValue = readPidInput(axis, term);
+        const percentChange = extractAxisDelta(axisPayload, term);
+        const nextValue = applyPercentChange(currentValue, percentChange, axis, term);
+        const sign = percentChange > 0 ? "+" : "";
+
+        lines.push(
+          `${term.toUpperCase()}: ${Math.round(currentValue)} → ${nextValue} (${sign}${percentChange.toFixed(1)}%)`
+        );
+      }
+
+      if (axis === "yaw") {
+        lines.push("Note: yaw D is kept at 0.");
+      }
+
+      lines.push("");
+    }
+
+    lines.push("Safety:");
+    lines.push("- Make small changes.");
+    lines.push("- Retest after changes.");
+    lines.push("- Check motor temperature after any D increase.");
+    lines.push("- Fix mechanical vibration before tuning around it.");
+
+    output.textContent = lines.join("\n");
+  }
+
+  window.calculateBetaflightPidValues = calculateBetaflightPidValues;
+
+  document.addEventListener("click", function (event) {
+    if (event.target && event.target.id === "calculate-pid-values") {
+      calculateBetaflightPidValues();
+    }
+  });
+
+  const nativeFetch = window.fetch;
+  if (typeof nativeFetch === "function" && !window.__aerotunePidCalculatorFetchHooked) {
+    window.__aerotunePidCalculatorFetchHooked = true;
+
+    window.fetch = async function () {
+      const response = await nativeFetch.apply(this, arguments);
+
+      try {
+        const url = String(arguments[0] || "");
+        if (url.includes("/upload-log") || url.includes("upload-log")) {
+          const clone = response.clone();
+          clone.json().then(function (data) {
+            window.latestAeroTuneAnalysis = data.analysis || data.result || data;
+            setTimeout(calculateBetaflightPidValues, 50);
+          }).catch(function () {});
+        }
+      } catch (error) {}
+
+      return response;
+    };
+  }
+})();
+</script>
+
 </body>
 </html>
