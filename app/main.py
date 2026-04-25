@@ -8,7 +8,12 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.analyzer import detect_oscillation, normalize_goal
+from app.analyzer import (
+    PUBLIC_DRONE_SIZE_OPTIONS,
+    detect_oscillation,
+    normalize_drone_size,
+    normalize_goal,
+)
 from app.log_validator import validate_log
 from app.parser import optimize_csv_file, parse_log
 
@@ -22,7 +27,7 @@ LAST_FILE_PATH: Optional[Path] = None
 LAST_OPTIMIZED_CSV: Optional[str] = None
 
 # AeroTune can analyze many sizes. Analyzer bands currently fall back safely for unsupported values.
-ALLOWED_DRONE_SIZES = {"1", "2", "2.5", "3", "3.5", "4", "5", "6", "7", "8", "10"}
+ALLOWED_DRONE_SIZES = set(PUBLIC_DRONE_SIZE_OPTIONS)
 
 # Local-first tool: large Blackbox CSV files are normal.
 MAX_UPLOAD_SIZE_BYTES = 250 * 1024 * 1024
@@ -162,8 +167,13 @@ async def upload_log(
         if not file.filename.lower().endswith(".csv"):
             return error_response("Only CSV files are allowed.", 400)
 
-        if drone_size not in ALLOWED_DRONE_SIZES:
-            return error_response("Invalid drone size. Use 1, 2, 2.5, 3, 3.5, 4, 5, 6, 7, 8, or 10.", 400)
+        size_key = normalize_drone_size(drone_size)
+        if size_key is None or size_key not in ALLOWED_DRONE_SIZES:
+            return error_response(
+                "Invalid drone size. Use 3, 3.5, 4, 5, or 7.",
+                400,
+                allowed_drone_sizes=sorted(ALLOWED_DRONE_SIZES, key=float),
+            )
 
         goal = normalize_goal(tuning_goal)
         saved_path = save_upload(file)
@@ -178,7 +188,7 @@ async def upload_log(
 
         LAST_OPTIMIZED_CSV = df.to_csv(index=False)
         validation = validate_log(df)
-        analysis = detect_oscillation(df, drone_size=drone_size, tuning_goal=goal)
+        analysis = detect_oscillation(df, drone_size=size_key, tuning_goal=goal)
 
         return {
             "filename": saved_path.name,
