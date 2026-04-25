@@ -28,10 +28,152 @@ GOAL_ALIASES = {
 
 VALID_GOALS = {"efficient", "locked_in", "floaty"}
 
-DRONE_BANDS = {
-    "5": {"low": (0.0, 35.0), "mid": (35.0, 90.0), "high": (90.0, 180.0), "ultra": (180.0, 490.0), "propwash": (45.0, 130.0)},
-    "7": {"low": (0.0, 25.0), "mid": (25.0, 70.0), "high": (70.0, 140.0), "ultra": (140.0, 490.0), "propwash": (35.0, 110.0)},
+DRONE_SIZE_PROFILES = {
+    # Frequency bands are intentionally higher for smaller props.
+    # Smaller props/motors spin faster, so using 7" bands on micros can misread normal
+    # small-prop vibration as low/mid-band behavior and give oversized PID deltas.
+    "3": {
+        "label": "3 inch cinewhoop / compact freestyle",
+        "bands": {
+            "low": (0.0, 55.0),
+            "mid": (55.0, 140.0),
+            "high": (140.0, 260.0),
+            "ultra": (260.0, 490.0),
+            "propwash": (75.0, 190.0),
+        },
+        "pid_scale": 0.55,
+        "clean_goal_scale": 0.50,
+        "pid_caps": {
+            "p": {"negative": 0.035, "positive": 0.022},
+            "i": {"negative": 0.020, "positive": 0.022},
+            "d": {"negative": 0.026, "positive": 0.014},
+            "ff": {"negative": 0.028, "positive": 0.032},
+        },
+    },
+    "3.5": {
+        "label": "3.5 inch cinewhoop / compact freestyle",
+        "bands": {
+            "low": (0.0, 50.0),
+            "mid": (50.0, 125.0),
+            "high": (125.0, 240.0),
+            "ultra": (240.0, 490.0),
+            "propwash": (65.0, 175.0),
+        },
+        "pid_scale": 0.65,
+        "clean_goal_scale": 0.55,
+        "pid_caps": {
+            "p": {"negative": 0.038, "positive": 0.026},
+            "i": {"negative": 0.022, "positive": 0.025},
+            "d": {"negative": 0.028, "positive": 0.017},
+            "ff": {"negative": 0.030, "positive": 0.035},
+        },
+    },
+    "4": {
+        "label": "4 inch sub-250 / compact long-range",
+        "bands": {
+            "low": (0.0, 45.0),
+            "mid": (45.0, 110.0),
+            "high": (110.0, 220.0),
+            "ultra": (220.0, 490.0),
+            "propwash": (55.0, 160.0),
+        },
+        "pid_scale": 0.78,
+        "clean_goal_scale": 0.65,
+        "pid_caps": {
+            "p": {"negative": 0.045, "positive": 0.032},
+            "i": {"negative": 0.025, "positive": 0.028},
+            "d": {"negative": 0.032, "positive": 0.020},
+            "ff": {"negative": 0.035, "positive": 0.042},
+        },
+    },
+    "5": {
+        "label": "5 inch freestyle / racing",
+        "bands": {
+            "low": (0.0, 35.0),
+            "mid": (35.0, 90.0),
+            "high": (90.0, 180.0),
+            "ultra": (180.0, 490.0),
+            "propwash": (45.0, 130.0),
+        },
+        "pid_scale": 1.00,
+        "clean_goal_scale": 1.00,
+        "pid_caps": {
+            "p": {"negative": 0.055, "positive": 0.045},
+            "i": {"negative": 0.035, "positive": 0.040},
+            "d": {"negative": 0.045, "positive": 0.032},
+            "ff": {"negative": 0.050, "positive": 0.055},
+        },
+    },
+    "7": {
+        "label": "7 inch long-range / heavy freestyle",
+        "bands": {
+            "low": (0.0, 25.0),
+            "mid": (25.0, 70.0),
+            "high": (70.0, 140.0),
+            "ultra": (140.0, 490.0),
+            "propwash": (35.0, 110.0),
+        },
+        "pid_scale": 1.00,
+        "clean_goal_scale": 0.90,
+        "pid_caps": {
+            "p": {"negative": 0.060, "positive": 0.050},
+            "i": {"negative": 0.040, "positive": 0.045},
+            "d": {"negative": 0.050, "positive": 0.035},
+            "ff": {"negative": 0.055, "positive": 0.060},
+        },
+    },
 }
+
+PUBLIC_DRONE_SIZE_OPTIONS = tuple(DRONE_SIZE_PROFILES.keys())
+
+DRONE_SIZE_ALIASES = {
+    "3": "3",
+    "3.0": "3",
+    "3inch": "3",
+    "3in": "3",
+    "3.5": "3.5",
+    "3.5inch": "3.5",
+    "3.5in": "3.5",
+    "4": "4",
+    "4.0": "4",
+    "4inch": "4",
+    "4in": "4",
+    "5": "5",
+    "5.0": "5",
+    "5inch": "5",
+    "5in": "5",
+    "7": "7",
+    "7.0": "7",
+    "7inch": "7",
+    "7in": "7",
+}
+
+VALID_ANALYZER_DRONE_SIZES = set(DRONE_SIZE_ALIASES.keys())
+
+# Backward-compatible name for any code that still imports DRONE_BANDS directly.
+DRONE_BANDS = {size: profile["bands"] for size, profile in DRONE_SIZE_PROFILES.items()}
+
+
+def normalize_drone_size(drone_size: str) -> Optional[str]:
+    raw = str(drone_size or "").strip().lower()
+    raw = raw.replace('"', "").replace("'", "").replace(" ", "")
+    raw = raw.replace("-inch", "inch").replace("_inch", "inch")
+    return DRONE_SIZE_ALIASES.get(raw)
+
+
+def get_drone_profile(drone_size: str) -> Tuple[str, Dict[str, Any]]:
+    size_key = normalize_drone_size(drone_size)
+    if size_key is None:
+        size_key = "7"
+    return size_key, DRONE_SIZE_PROFILES[size_key]
+
+
+def _serializable_bands(profile: Dict[str, Any]) -> Dict[str, List[float]]:
+    return {
+        name: [float(bounds[0]), float(bounds[1])]
+        for name, bounds in profile["bands"].items()
+    }
+
 
 SOURCE_REFERENCES = [
     "Betaflight PID Tuning Guide: https://betaflight.com/docs/wiki/guides/current/PID-Tuning-Guide",
@@ -525,6 +667,45 @@ def _apply_goal(axis: str, issue: str, delta: Dict[str, float], goal: str) -> Di
     return result
 
 
+def _cap_signed(value: float, negative_cap: float, positive_cap: float) -> float:
+    return float(np.clip(value, -abs(negative_cap), abs(positive_cap)))
+
+
+def _apply_size_pid_limits(
+    axis: str,
+    issue: str,
+    delta: Dict[str, float],
+    profile: Dict[str, Any],
+) -> Dict[str, float]:
+    # Apply size-specific PID guardrails after issue and goal logic.
+    #
+    # This prevents small-prop builds from receiving the same magnitude of PID move as a
+    # 5"/7" build. D increases are especially capped on 3", 3.5", and 4" profiles
+    # because small motors/props can heat up or sound rough quickly when D is pushed.
+    scale = float(profile.get("pid_scale", 1.0))
+
+    if issue == "clean":
+        scale *= float(profile.get("clean_goal_scale", 1.0))
+
+    caps = profile.get("pid_caps", {})
+    result: Dict[str, float] = {}
+
+    for term, raw_value in delta.items():
+        term_caps = caps.get(term, {"negative": 0.06, "positive": 0.06})
+        scaled = float(raw_value) * scale
+        result[term] = _cap_signed(
+            scaled,
+            float(term_caps.get("negative", 0.06)),
+            float(term_caps.get("positive", 0.06)),
+        )
+
+    if axis == "yaw":
+        result["d"] = 0.0
+
+    return result
+
+
+
 def _moves(issue: str, axis: str, goal: str) -> List[str]:
     yaw_note = "D: keep yaw D at 0. Tune yaw with P/I/FF only."
 
@@ -651,13 +832,15 @@ def detect_oscillation(df: pd.DataFrame, drone_size: str = "7", tuning_goal: str
             "common_problem_library": COMMON_PROBLEM_LIBRARY,
         }
 
+    size_key, drone_profile = get_drone_profile(drone_size)
     time = df["time"].to_numpy(dtype=float)
-    bands = DRONE_BANDS.get(str(drone_size), DRONE_BANDS["7"])
+    bands = drone_profile["bands"]
     throttle = df["throttle"].to_numpy(dtype=float) if "throttle" in df.columns else None
 
     axes: Dict[str, Dict[str, Any]] = {}
     recommendations: List[Dict[str, Any]] = []
     global_warnings = [
+        f"Using {drone_profile['label']} size profile: frequency bands and PID delta caps are size-specific.",
         "Recommendations are conservative percentage deltas, not final PID numbers.",
         "Retest after every change.",
         "Check motor temperature after any D increase or filter reduction.",
@@ -682,6 +865,7 @@ def detect_oscillation(df: pd.DataFrame, drone_size: str = "7", tuning_goal: str
         issue, confidence, reason = _classify(axis_name, stats)
         base_delta = _base_delta(axis_name, issue)
         pid_delta = _apply_goal(axis_name, issue, base_delta, goal)
+        pid_delta = _apply_size_pid_limits(axis_name, issue, pid_delta, drone_profile)
         valid_for_pid = confidence >= 0.55
 
         if valid_for_pid:
@@ -698,6 +882,8 @@ def detect_oscillation(df: pd.DataFrame, drone_size: str = "7", tuning_goal: str
             "confidence": round(confidence, 3),
             "confidence_reason": reason,
             "valid_for_pid": valid_for_pid,
+            "size_profile": size_key,
+            "size_label": drone_profile["label"],
             "pid_delta_pct": {k: round(v, 4) for k, v in pid_delta.items()},
             "recommendation_text": _recommendation(axis_name, issue, goal),
             "tuning_moves": _moves(issue, axis_name, goal),
@@ -751,7 +937,16 @@ def detect_oscillation(df: pd.DataFrame, drone_size: str = "7", tuning_goal: str
         "recommendations": recommendations,
         "sample_rate_hz": round(float(1.0 / np.median(np.diff(time))), 2) if len(time) > 2 else None,
         "duration_s": round(float(time[-1] - time[0]), 3) if len(time) > 1 else None,
-        "drone_size": str(drone_size),
+        "drone_size": size_key,
+        "requested_drone_size": str(drone_size),
+        "drone_size_profile": size_key,
+        "drone_size_label": drone_profile["label"],
+        "frequency_bands_hz": _serializable_bands(drone_profile),
+        "pid_size_profile": {
+            "pid_scale": drone_profile["pid_scale"],
+            "clean_goal_scale": drone_profile["clean_goal_scale"],
+            "pid_caps": drone_profile["pid_caps"],
+        },
         "tuning_goal": goal,
         "common_problem_library": COMMON_PROBLEM_LIBRARY,
         "source_references": SOURCE_REFERENCES,

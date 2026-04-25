@@ -352,6 +352,19 @@
   }
 }
 
+
+
+.field-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+select#drone_size {
+  border-color: rgba(35, 215, 198, 0.28);
+}
+
 </style>
 </head>
 <body>
@@ -391,9 +404,15 @@
 
           <label>Drone Size</label>
           <select id="drone_size">
-            <option value="7" selected>7 inch / long-range / heavy freestyle</option>
-            <option value="5">5 inch / freestyle / racing</option>
-          </select>
+        <option value="3">3" cinewhoop / compact freestyle</option>
+        <option value="3.5">3.5" cinewhoop / compact freestyle</option>
+        <option value="4">4" sub-250 / compact long-range</option>
+        <option value="5">5" freestyle / racing</option>
+        <option value="7" selected>7" long-range / heavy freestyle</option>
+      </select>
+      <p class="field-note size-profile-note">
+        Drone size controls backend frequency bands and PID delta limits. Smaller builds get tighter, safer PID moves.
+      </p>
 
           <label>Tune Goal</label>
           <select id="tuning_goal">
@@ -566,13 +585,16 @@ function deltaText(delta) {
 function renderAnalysis(data) {
   const analysis = data.analysis;
   const validation = data.validation || {};
+
+  const sizeLabel = analysis.drone_size_label || `${analysis.drone_size}"`;
+  const bandLabel = analysis.frequency_bands_hz ? "size-specific bands" : "default bands";
   statRows.textContent = Number(data.rows || 0).toLocaleString();
   statQuality.textContent = validation.grade || "—";
   gradeBadge.textContent = `Grade ${validation.grade || "?"}`;
 
   summary.innerHTML = `
     <h3>${analysis.summary || "Analysis complete"}</h3>
-    <p>Goal: ${analysis.tuning_goal} | Drone: ${analysis.drone_size}" | ${analysis.duration_s}s @ ${analysis.sample_rate_hz} Hz</p>
+    <p>Goal: ${analysis.tuning_goal} | Drone: ${sizeLabel} | ${analysis.duration_s}s @ ${analysis.sample_rate_hz} Hz</p>\n  <p class="field-note">Backend profile: ${analysis.drone_size_profile || analysis.drone_size || "unknown"} / ${bandLabel}</p>
     <p>${validation.summary || ""}</p>
   `;
 
