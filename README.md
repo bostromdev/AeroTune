@@ -31,7 +31,49 @@ For this stage of the project, local-first development keeps AeroTune practical,
 
 ![Axis Recommendations](assets/screenshots/axis-recommendations.png)
 
-### CSV Optimizer
+### 🧪 Recommended Blackbox Test Flight
+
+For the best AeroTune results, do not upload a random hover-only log. AeroTune works best when each CSV comes from a repeatable Blackbox test flight that gives the analyzer enough useful movement to compare gyro behavior, setpoint tracking, throttle response, propwash recovery, vibration, and general tune feel.
+
+Recommended flight:
+
+- Record about 60–90 seconds of clean Blackbox data.
+- 90 seconds is ideal when possible.
+- Use the same basic flight style every time you test a tune change.
+- Include smooth normal flying, not just hovering.
+- Add a few controlled throttle punches.
+- Add medium turns, quick stops, and direction changes.
+- Add some dirty-air recovery / propwash moments if safe.
+- Keep the flight controlled and repeatable.
+- Avoid crashes, bumps, heavy wind, or damaged props during test logs.
+
+When comparing two tune changes, repeat the same basic flight pattern for both CSV files.
+
+This is important. If one CSV is only smooth cruising and the next CSV has hard throttle punches, AeroTune may be comparing different flying conditions instead of the actual tune change.
+
+Best practice:
+
+```text
+Same drone
+Same props
+Same battery type
+Same tune goal
+Same Blackbox settings
+Same approximate flight length
+Same style of test flight
+
+Example test log:
+
+90-second Blackbox log:
+- smooth cruise
+- small roll/pitch/yaw inputs
+- a few throttle punches
+- a few turns
+- one or two propwash recovery moments
+
+This gives AeroTune a better chance to identify real issues like propwash, bounceback, weak hold, poor tracking, high-throttle oscillation, or excess vibration.
+
+## CSV Optimizer
 
 ![CSV Optimizer](assets/screenshots/csv-optimizer.png)
 
