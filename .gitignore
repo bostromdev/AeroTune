@@ -1,13 +1,31 @@
-
-!uploads/.gitkeep
-*.bak
-*.pyc
-*.save
-.DS_Store
-.env
-AeroTune_OLD_FILES_TO_DELETE/
+# Python
 __pycache__/
-sample_logs/*.csv
-static/index_original.html
-uploads/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store
+
+# Local uploads / flight logs
 uploads/*
+!uploads/.gitkeep
+
+# Local backup files
+*.bak
+*.bak_*
+static/index_original.html
+
+# Local patch/install artifacts
+apply_aerotune_*.py
+aerotune_*_patch*.zip
+aerotune_*_fix*.zip
+AEROTUNE_*_README.md
