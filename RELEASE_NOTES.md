@@ -130,3 +130,27 @@ AeroTune converts:
 
 raw data → pilot decisions
 
+
+---
+
+# AeroTune v1.02 — Size Profiles + Betaflight PID Value Calculator
+
+## Major Updates
+
+### Size-Specific Drone Profiles
+AeroTune now supports backend size profiles for:
+
+- 3" cinewhoop / compact freestyle
+- 3.5" cinewhoop / compact freestyle
+- 4" sub-250 / compact long-range
+- 5" freestyle / racing
+- 7" long-range / heavy freestyle
+
+Drone size now affects analyzer behavior instead of being only a UI option.
+
+### Backend Size Handling
+The backend now normalizes drone size input and only accepts sizes that have calibrated analyzer profiles:
+
+```text
+3, 3.5, 4, 5, 7
+
