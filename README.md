@@ -1,6 +1,6 @@
 # ⚡ AeroTune
 
-**AeroTune** is a feel-based FPV drone tuning assistant that turns Blackbox CSV logs into clear, pilot-readable PID recommendations.
+**AeroTune** is a feel-based FPV drone tuning assistant that turns Betaflight Blackbox CSV logs into clear, pilot-readable PID recommendations.
 
 Instead of overwhelming pilots with raw graphs and confusing numbers, AeroTune translates flight-log behavior into simple tuning decisions:
 
@@ -13,9 +13,9 @@ What should I test next?
 
 ---
 
-## 🖥️ Why AeroTune Runs Locally
+## Why AeroTune Runs Locally
 
-AeroTune is designed as a local-first tool.
+AeroTune is designed as a **local-first tool**.
 
 FPV Blackbox CSV logs can be large, especially when recording longer flights or high-rate gyro data. Running AeroTune locally avoids common web-hosting issues such as upload limits, request timeouts, slow processing, and failed large-file uploads.
 
@@ -23,21 +23,31 @@ Local use also keeps flight logs on the pilot’s own machine instead of forcing
 
 For this stage of the project, local-first development keeps AeroTune practical, fast, and easier to maintain as a solo-built tool. The focus is on improving the analyzer logic, CSV optimizer, and tuning recommendations before building a more complex hosted interface.
 
-### Dashboard
+---
+
+## Dashboard
 
 ![AeroTune Dashboard](assets/screenshots/dashboard.png)
 
-### Axis Recommendations
+## Axis Recommendations
 
 ![Axis Recommendations](assets/screenshots/axis-recommendations.png)
 
-### 🧪 Recommended Blackbox Test Flight
+## CSV Optimizer
 
-For the best AeroTune results, do not upload a random hover-only log. AeroTune works best when each CSV comes from a repeatable Blackbox test flight that gives the analyzer enough useful movement to compare gyro behavior, setpoint tracking, throttle response, propwash recovery, vibration, and general tune feel.
+![CSV Optimizer](assets/screenshots/csv-optimizer.png)
+
+---
+
+## Recommended Blackbox Test Flight
+
+For the best AeroTune results, do **not** upload a random hover-only log.
+
+AeroTune works best when each CSV comes from a repeatable Blackbox test flight that gives the analyzer enough useful movement to compare gyro behavior, setpoint tracking, throttle response, propwash recovery, vibration, and general tune feel.
 
 Recommended flight:
 
-- Record about 60–90 seconds of clean Blackbox data.
+- Record about **60–90 seconds** of clean Blackbox data.
 - 90 seconds is ideal when possible.
 - Use the same basic flight style every time you test a tune change.
 - Include smooth normal flying, not just hovering.
@@ -61,25 +71,24 @@ Same tune goal
 Same Blackbox settings
 Same approximate flight length
 Same style of test flight
+```
 
 Example test log:
 
+```text
 90-second Blackbox log:
 - smooth cruise
 - small roll/pitch/yaw inputs
 - a few throttle punches
 - a few turns
 - one or two propwash recovery moments
+```
 
 This gives AeroTune a better chance to identify real issues like propwash, bounceback, weak hold, poor tracking, high-throttle oscillation, or excess vibration.
 
-## CSV Optimizer
-
-![CSV Optimizer](assets/screenshots/csv-optimizer.png)
-
 ---
 
-## ✨ Features
+## Features
 
 - Upload FPV Blackbox CSV logs
 - Analyze roll, pitch, and yaw independently
@@ -91,7 +100,7 @@ This gives AeroTune a better chance to identify real issues like propwash, bounc
 
 ---
 
-## 🧠 What AeroTune Detects
+## What AeroTune Detects
 
 AeroTune currently identifies:
 
@@ -115,7 +124,7 @@ Why: D helps damp dirty-air recovery, but motor heat must be checked.
 
 ---
 
-## 📊 CSV Optimizer
+## CSV Optimizer
 
 The built-in optimizer converts compatible logs into a standard AeroTune-ready format:
 
@@ -127,7 +136,7 @@ This helps keep analysis consistent across logs with different column names or l
 
 ---
 
-## 🎯 Why AeroTune Exists
+## Why AeroTune Exists
 
 FPV tuning is hard because raw data does not always explain flight feel.
 
@@ -141,20 +150,23 @@ It is designed for pilots building or tuning drones with mixed parts, DIY frames
 
 ---
 
-## 🧩 Tuning Modes
+## Tuning Modes
 
 ### Efficient / Smooth
+
 Conservative tuning for smooth flight, lower heat risk, and stable behavior.
 
 ### Locked-In / Responsive
+
 Sharper response and tighter stick feel.
 
 ### Floaty / Cinematic
+
 Softer movement for smoother cinematic flying.
 
 ---
 
-## ⚙️ Local Setup
+## Local Setup
 
 Clone the repo:
 
@@ -184,7 +196,7 @@ http://127.0.0.1:8000
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - Python
 - FastAPI
@@ -197,7 +209,7 @@ http://127.0.0.1:8000
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```text
 AeroTune/
@@ -218,7 +230,7 @@ AeroTune/
 
 ---
 
-## 📚 References
+## References
 
 AeroTune tuning logic is based on established FPV PID tuning principles:
 
@@ -236,7 +248,21 @@ sources.md
 
 ---
 
-## ⚠️ Disclaimer
+## License
+
+AeroTune is released under the Apache License 2.0.
+
+You are free to use, modify, fork, study, and build from this project. If you publish or redistribute work based on AeroTune, please keep the license notice and give credit where reasonable:
+
+```text
+Based on AeroTune by Christopher Bostrom
+```
+
+The goal is to encourage FPV pilots, developers, and researchers to use and improve the project while keeping clear attribution to the original creator.
+
+---
+
+## Disclaimer
 
 AeroTune gives conservative tuning recommendations, not guaranteed final PID values.
 
@@ -249,7 +275,7 @@ Always:
 
 ---
 
-## 🔮 Roadmap
+## Roadmap
 
 Planned future improvements:
 
@@ -262,7 +288,7 @@ Planned future improvements:
 
 ---
 
-## 👨‍💻 Author
+## Author
 
 Built by **Christopher Bostrom**
 
@@ -270,6 +296,6 @@ GitHub: [bostromdev](https://github.com/bostromdev)
 
 ---
 
-## 💬 Summary
+## Summary
 
 AeroTune helps FPV pilots stop guessing and start making data-backed tuning decisions.
