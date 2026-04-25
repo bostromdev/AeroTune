@@ -8,9 +8,10 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.analyzer import COMMON_PROBLEM_LIBRARY, detect_oscillation, normalize_goal
+from app.analyzer import detect_oscillation, normalize_goal
 from app.log_validator import validate_log
 from app.parser import optimize_csv_file, parse_log
+
 
 app = FastAPI(title="AeroTune")
 
@@ -20,7 +21,10 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 LAST_FILE_PATH: Optional[Path] = None
 LAST_OPTIMIZED_CSV: Optional[str] = None
 
-ALLOWED_DRONE_SIZES = {"5", "7"}
+# AeroTune can analyze many sizes. Analyzer bands currently fall back safely for unsupported values.
+ALLOWED_DRONE_SIZES = {"1", "2", "2.5", "3", "3.5", "4", "5", "6", "7", "8", "10"}
+
+# Local-first tool: large Blackbox CSV files are normal.
 MAX_UPLOAD_SIZE_BYTES = 250 * 1024 * 1024
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -42,6 +46,7 @@ def safe_filename(filename: str | None) -> str:
 def save_upload(file: UploadFile) -> Path:
     filename = safe_filename(file.filename)
     path = UPLOAD_DIR / filename
+
     stem = path.stem
     ext = path.suffix or ".csv"
     suffix = 1
@@ -51,12 +56,15 @@ def save_upload(file: UploadFile) -> Path:
         suffix += 1
 
     bytes_written = 0
+
     with open(path, "wb") as buffer:
         while True:
             chunk = file.file.read(1024 * 1024)
             if not chunk:
                 break
+
             bytes_written += len(chunk)
+
             if bytes_written > MAX_UPLOAD_SIZE_BYTES:
                 buffer.close()
                 try:
@@ -64,17 +72,10 @@ def save_upload(file: UploadFile) -> Path:
                 except FileNotFoundError:
                     pass
                 raise ValueError("File too large. Max upload size is 250 MB.")
+
             buffer.write(chunk)
 
     return path
-
-
-def optimized_csv_response(csv_text: str, filename: str = "aerotune_optimized.csv") -> StreamingResponse:
-    return StreamingResponse(
-        iter([csv_text]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
 
 
 def build_plot_payload(df):
@@ -88,46 +89,60 @@ def build_plot_payload(df):
     if len(time) < 8:
         raise ValueError("Not enough samples to plot.")
 
-    max_points = 3000
-    step_plot = max(1, int(np.ceil(len(time) / max_points)))
-    plot_time = time[::step_plot]
-    plot_gyro = gyro[::step_plot]
-    plot_setpoint = setpoint[::step_plot]
-
     dt = float(np.mean(np.diff(time)))
     if not np.isfinite(dt) or dt <= 0:
         dt = 0.001
 
+    alpha = 0.35
+    smoothed = np.empty_like(gyro)
+    smoothed[0] = gyro[0]
+
+    for i in range(1, len(gyro)):
+        smoothed[i] = smoothed[i - 1] + alpha * (gyro[i] - smoothed[i - 1])
+
     centered = gyro - np.mean(gyro)
-    step_fft = max(1, int(np.ceil(len(centered) / 8192)))
-    fft_signal = centered[::step_fft]
-    effective_dt = dt * step_fft
-    window = np.hanning(len(fft_signal))
-    fft_vals = np.fft.rfft(fft_signal * window)
-    freqs = np.fft.rfftfreq(len(fft_signal), d=effective_dt)
+    step = max(1, int(np.ceil(len(centered) / 8192)))
+    centered = centered[::step]
+    effective_dt = dt * step
+
+    window = np.hanning(len(centered))
+    fft_vals = np.fft.rfft(centered * window)
+    freqs = np.fft.rfftfreq(len(centered), d=effective_dt)
     mags = np.abs(fft_vals)
+
     valid = freqs > 0
     freqs = freqs[valid]
     mags = mags[valid]
 
     peak_frequency_hz = None
     if len(freqs) > 0:
-        peak_frequency_hz = float(freqs[int(np.argmax(mags))])
+        idx = int(np.argmax(mags))
+        peak_frequency_hz = float(freqs[idx])
 
     return {
-        "time": plot_time.tolist(),
-        "gyro": plot_gyro.tolist(),
-        "setpoint": plot_setpoint.tolist(),
-        "freqs": freqs[:2000].tolist(),
-        "magnitude": mags[:2000].tolist(),
+        "time": time.tolist(),
+        "gyro": gyro.tolist(),
+        "setpoint": setpoint.tolist(),
+        "simulated": smoothed.tolist(),
+        "freqs": freqs.tolist(),
+        "magnitude": mags.tolist(),
         "peak_frequency_hz": round(peak_frequency_hz, 2) if peak_frequency_hz is not None else None,
     }
+
+
+def optimized_csv_response(csv_text: str, filename: str = "aerotune_optimized.csv") -> StreamingResponse:
+    return StreamingResponse(
+        iter([csv_text]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
 def home():
     try:
-        return Path("static/index.html").read_text(encoding="utf-8")
+        with open("static/index.html", "r", encoding="utf-8") as f:
+            return f.read()
     except Exception as exc:
         return HTMLResponse(f"<h1>Error loading UI</h1><p>{exc}</p>", status_code=500)
 
@@ -143,10 +158,12 @@ async def upload_log(
     try:
         if not file.filename:
             return error_response("No file selected.", 400)
+
         if not file.filename.lower().endswith(".csv"):
             return error_response("Only CSV files are allowed.", 400)
+
         if drone_size not in ALLOWED_DRONE_SIZES:
-            return error_response("Invalid drone size. Use 5 or 7.", 400)
+            return error_response("Invalid drone size. Use 1, 2, 2.5, 3, 3.5, 4, 5, 6, 7, 8, or 10.", 400)
 
         goal = normalize_goal(tuning_goal)
         saved_path = save_upload(file)
@@ -154,7 +171,10 @@ async def upload_log(
 
         df = parse_log(saved_path)
         if df is None or df.empty:
-            return error_response("Could not parse CSV. Make sure the file includes usable time and gyro data.", 400)
+            return error_response(
+                "Could not parse CSV. Try the CSV optimizer or send the file so AeroTune can learn this format.",
+                400,
+            )
 
         LAST_OPTIMIZED_CSV = df.to_csv(index=False)
         validation = validate_log(df)
@@ -188,12 +208,14 @@ async def optimize_log(file: UploadFile = File(...)):
     try:
         if not file.filename:
             return error_response("No file selected.", 400)
+
         if not file.filename.lower().endswith(".csv"):
             return error_response("Only CSV files are allowed.", 400)
 
         saved_path = save_upload(file)
         df = optimize_csv_file(saved_path)
         LAST_OPTIMIZED_CSV = df.to_csv(index=False)
+
         download_name = f"{Path(safe_filename(file.filename)).stem}_aerotune_ready.csv"
         return optimized_csv_response(LAST_OPTIMIZED_CSV, download_name)
 
@@ -212,12 +234,8 @@ async def optimize_log(file: UploadFile = File(...)):
 def download_optimized():
     if not LAST_OPTIMIZED_CSV:
         return error_response("No optimized CSV available yet. Upload and analyze a log first.", 400)
+
     return optimized_csv_response(LAST_OPTIMIZED_CSV, "aerotune_optimized.csv")
-
-
-@app.get("/common-problems")
-def common_problems():
-    return {"problems": COMMON_PROBLEM_LIBRARY}
 
 
 @app.get("/plot")
@@ -225,10 +243,13 @@ def plot():
     try:
         if LAST_FILE_PATH is None or not LAST_FILE_PATH.exists():
             return error_response("No uploaded file available yet.", 400)
+
         df = parse_log(LAST_FILE_PATH)
         if df is None or df.empty:
             return error_response("Could not parse the uploaded file for plotting.", 400)
+
         return build_plot_payload(df)
+
     except ValueError as exc:
         return error_response(str(exc), 400)
     except Exception as exc:
