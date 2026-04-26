@@ -13,6 +13,8 @@ What should I test next?
 
 ---
 
+AeroTune is an independent FPV Blackbox analysis project created by Christopher Bostrom / bostromdev. This project is not affiliated with similarly named commercial tools or services.
+
 ## Why AeroTune Runs Locally
 
 AeroTune is designed as a **local-first tool**.
