@@ -12,7 +12,11 @@ What should I test next?
 ```
 
 ---
+## Notice
 
+AeroTune is an independent open-source FPV Blackbox analysis project created by Christopher Bostrom / bostromdev. Will list collaborators that have sent csv files and I will prove it myself with my drone. Looking forward to helping as many as I can for FREE!
+
+This project is not affiliated with AeroTune7, aerobot2.com, or any similarly named paid tuning tool.
 AeroTune is an independent FPV Blackbox analysis project created by Christopher Bostrom / bostromdev. This project is not affiliated with similarly named commercial tools or services.
 ## Project Origin
 
