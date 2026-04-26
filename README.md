@@ -14,7 +14,13 @@ What should I test next?
 ---
 
 AeroTune is an independent FPV Blackbox analysis project created by Christopher Bostrom / bostromdev. This project is not affiliated with similarly named commercial tools or services.
+## Project Origin
 
+AeroTune was created by Christopher Bostrom / bostromdev as an independent FPV Blackbox log analysis tool for Betaflight tuning support.
+
+The project focuses on translating Blackbox CSV data into practical tuning guidance for drone pilots, including noise, tracking, propwash, filter, and PID adjustment feedback.
+
+AeroTune, AeroTune FPV, and the related project materials in this repository are not affiliated with any similarly named commercial tools or third-party services. 
 ## Why AeroTune Runs Locally
 
 AeroTune is designed as a **local-first tool**.
