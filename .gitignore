@@ -19,9 +19,13 @@ env/
 uploads/*
 !uploads/.gitkeep
 
+# Local converter build. Do not commit Betaflight blackbox-tools into AeroTune.
+tools/blackbox-tools/
+
 # Local backup files
 *.bak
 *.bak_*
+backups/
 static/index_original.html
 
 # Local patch/install artifacts

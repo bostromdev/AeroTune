@@ -385,7 +385,7 @@
         <div>
           <h1>AeroTune</h1>
           <div class="sub">
-            FPV Blackbox CSV analyzer with V1.1/V1.2 parser diagnostics:
+            FPV Blackbox analyzer with V1.3 raw-log converter support:
             detected columns, missing columns, sample rate, duration, usable rows, and clear failure reasons.
           </div>
         </div>
@@ -398,12 +398,12 @@
         <div class="card">
           <h2>Analyzer Controls</h2>
           <p class="small">
-            Upload a Betaflight Blackbox CSV export. Raw .BBL/.BFL upload is planned for V1.3.
+            Upload a Betaflight CSV export, or a raw .BBL/.BFL/.TXT Blackbox log after blackbox_decode is installed.
           </p>
 
           <form id="analyzeForm">
-            <label for="logFile">Blackbox CSV</label>
-            <input id="logFile" name="file" type="file" accept=".csv,text/csv" required />
+            <label for="logFile">Blackbox CSV / Raw Log</label>
+            <input id="logFile" name="file" type="file" accept=".csv,.bbl,.bfl,.txt,text/csv" required />
 
             <label for="droneSize">Drone Size</label>
             <select id="droneSize" name="drone_size">
@@ -430,16 +430,25 @@
         <div class="card">
           <h2>CSV Optimizer</h2>
           <p class="small">
-            Converts compatible messy CSV exports into AeroTune-ready columns and now returns a parser report too.
+            Converts compatible CSV exports and raw Blackbox logs into AeroTune-ready columns, then returns converter and parser reports.
           </p>
 
           <form id="optimizeForm">
-            <label for="optimizerFile">CSV File To Optimize</label>
-            <input id="optimizerFile" name="file" type="file" accept=".csv,text/csv" required />
+            <label for="optimizerFile">CSV / Raw Log To Optimize</label>
+            <input id="optimizerFile" name="file" type="file" accept=".csv,.bbl,.bfl,.txt,text/csv" required />
             <button id="optimizeBtn" type="submit">Download Optimized CSV</button>
           </form>
 
-          <div id="optimizerStatus" class="message">No optimizer job yet.</div>
+          <div id="optimizerStatus" class="message">No optimizer/converter job yet.</div>
+        </div>
+
+
+        <div class="card">
+          <h2>Converter Report</h2>
+          <div id="converterStatus" class="message">Waiting for upload.</div>
+          <div id="converterReport" class="report"></div>
+          <div id="converterWarnings" class="chips"></div>
+          <div id="converterSuggestions" class="chips"></div>
         </div>
 
         <div class="card">
@@ -468,7 +477,7 @@
               <div class="lbl">duration</div>
             </div>
           </div>
-          <div id="summary" class="message" style="margin-top:12px;">Upload a CSV to start analysis.</div>
+          <div id="summary" class="message" style="margin-top:12px;">Upload a CSV, .BBL, .BFL, or .TXT Blackbox log to start analysis.</div>
           <div id="usefulSummary" class="useful-summary"></div>
         </div>
 
@@ -496,6 +505,11 @@
     const parserReport = document.getElementById("parserReport");
     const parserWarnings = document.getElementById("parserWarnings");
     const parserSuggestions = document.getElementById("parserSuggestions");
+
+    const converterStatus = document.getElementById("converterStatus");
+    const converterReport = document.getElementById("converterReport");
+    const converterWarnings = document.getElementById("converterWarnings");
+    const converterSuggestions = document.getElementById("converterSuggestions");
 
     const summary = document.getElementById("summary");
     const usefulSummary = document.getElementById("usefulSummary");
@@ -531,6 +545,38 @@
       div.className = "report-row";
       div.innerHTML = `<b>${label}</b><span>${valueOrDash(value)}</span>`;
       return div;
+    }
+
+    function renderConverterReport(report) {
+      if (!converterReport || !converterStatus) return;
+
+      converterReport.innerHTML = "";
+      converterWarnings.innerHTML = "";
+      converterSuggestions.innerHTML = "";
+
+      if (!report) {
+        setMessage(converterStatus, "No converter report returned.", "warn");
+        return;
+      }
+
+      setMessage(converterStatus, report.message || "Converter report received.", report.ok ? "good" : "bad");
+
+      const rows = [
+        ["Source file", report.source_filename],
+        ["Source type", report.source_file_type],
+        ["Converted", report.converted ? "yes" : "no"],
+        ["Tool", report.tool],
+        ["Tool path", report.tool_path],
+        ["Analysis file", report.analysis_filename],
+        ["Generated CSV files", (report.generated_csv_files || []).join(", ") || "none"],
+        ["Duration", report.duration_seconds ? `${report.duration_seconds} s` : "—"],
+        ["Return code", report.returncode],
+        ["Error code", report.error_code || "none"],
+      ];
+
+      rows.forEach(([label, value]) => converterReport.appendChild(reportRow(label, value)));
+      (report.warnings || []).forEach(w => converterWarnings.appendChild(chip(`Warning: ${w}`, "warn")));
+      (report.suggestions || []).forEach(s => converterSuggestions.appendChild(chip(`Try: ${s}`, report.ok ? "" : "bad")));
     }
 
     function renderParserReport(report) {
@@ -752,6 +798,7 @@
           <li>${valueOrDash(report.sample_rate_hz || analysis.sample_rate_hz, " Hz")} sample rate</li>
           <li>${valueOrDash(report.duration_seconds || analysis.duration_s, " s")} duration</li>
           <li>${shortText(analysis.drone_size_label || "Drone size profile not reported")}</li>
+          <li>${data.converted ? "raw log converted before analysis" : "CSV analyzed directly"}</li>
         </ul>`),
         box("Signal / tracking clues", `<ul class="summary-list">${signalReads.map(item => `<li>${item}</li>`).join("")}</ul>`, "full"),
         box("Cautions", `<ul class="summary-list">${cautionItems.map(item => `<li>${item}</li>`).join("")}</ul>`),
@@ -835,12 +882,14 @@
       downloadAnalyzed.classList.add("hidden");
       setMessage(summary, "Analyzing log...", "warn");
       if (usefulSummary) usefulSummary.innerHTML = "";
+      if (converterReport) { converterReport.innerHTML = ""; converterWarnings.innerHTML = ""; converterSuggestions.innerHTML = ""; }
 
       try {
         const response = await fetch("/upload-log", { method: "POST", body: formData });
         const data = await readJsonResponse(response);
 
         if (!response.ok) {
+          renderConverterReport(data.converter_report);
           renderParserReport(data.parser_report);
           setMessage(summary, data.error || "Analysis failed.", "bad");
           if (usefulSummary) usefulSummary.innerHTML = "";
@@ -849,6 +898,7 @@
           return;
         }
 
+        renderConverterReport(data.converter_report);
         renderParserReport(data.parser_report);
         renderAnalysis(data);
         downloadAnalyzed.classList.remove("hidden");
@@ -870,6 +920,7 @@
         const response = await fetch("/optimize-log", { method: "POST", body: formData });
         const data = await readJsonResponse(response);
 
+        renderConverterReport(data.converter_report);
         renderParserReport(data.parser_report);
 
         if (!response.ok) {
@@ -878,7 +929,7 @@
         }
 
         setMessage(optimizerStatus, `Optimized ${data.rows} rows. Download started.`, "good");
-        downloadText(data.download_filename || "aerotune_ready.csv", data.optimized_csv || "");
+        if (data.download_url) { window.location.href = data.download_url; }
       } catch (error) {
         setMessage(optimizerStatus, error.message || String(error), "bad");
       } finally {

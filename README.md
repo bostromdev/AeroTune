@@ -19,7 +19,7 @@ AeroTune is an early engineering project, not a finished commercial PID tuner.
 
 The goal is to test whether Betaflight Blackbox CSV logs can be translated into useful, feel-based tuning recommendations using known FPV PID tuning principles.
 
-AeroTune currently supports **Betaflight CSV exports**. Native `.bbl` / `.bfl` upload support is planned for a later converter update.
+AeroTune supports **Betaflight CSV exports** directly. V1.3 adds optional raw `.bbl`, `.bfl`, and `.txt` upload support by using a locally installed `blackbox_decode` converter.
 
 Some newer Betaflight firmware versions may export CSV files with different column names or structure. AeroTune V1.1 / V1.2 focuses on making the parser stronger and showing clear parser diagnostics instead of failing silently.
 
@@ -177,6 +177,7 @@ Advanced users can also use command-line Blackbox tools to decode supported logs
 ## Features
 
 - Upload FPV Blackbox CSV logs
+- Upload raw `.bbl`, `.bfl`, and `.txt` logs when `blackbox_decode` is installed locally
 - Analyze roll, pitch, and yaw independently
 - Detect common tuning problems
 - Get simple PID direction changes instead of fake final PID numbers
@@ -225,6 +226,70 @@ This update helps users diagnose:
 
 ---
 
+
+
+## V1.3 Raw Blackbox Log Converter
+
+AeroTune V1.3 adds optional raw Blackbox upload support.
+
+Supported upload types:
+
+```text
+.csv
+.bbl
+.bfl
+.txt
+```
+
+CSV files are analyzed directly.
+
+Raw `.bbl`, `.bfl`, and `.txt` files are first converted into CSV using Betaflight's `blackbox_decode` tool, then passed through AeroTune's parser and analyzer.
+
+AeroTune does **not** bundle `blackbox_decode` inside this repository. The converter must be installed locally or pointed to with an environment variable:
+
+```bash
+export BLACKBOX_DECODE_PATH="$PWD/tools/blackbox-tools/obj/blackbox_decode"
+```
+
+AeroTune searches for `blackbox_decode` in this order:
+
+```text
+1. BLACKBOX_DECODE_PATH
+2. tools/blackbox-tools/obj/blackbox_decode
+3. system PATH
+```
+
+Recommended local setup:
+
+```bash
+mkdir -p tools
+if [ ! -d tools/blackbox-tools/.git ]; then
+  git clone https://github.com/betaflight/blackbox-tools.git tools/blackbox-tools
+else
+  git -C tools/blackbox-tools pull --ff-only
+fi
+
+make -C tools/blackbox-tools obj/blackbox_decode
+export BLACKBOX_DECODE_PATH="$PWD/tools/blackbox-tools/obj/blackbox_decode"
+$BLACKBOX_DECODE_PATH --help
+```
+
+Why the converter is separate:
+
+- `blackbox_decode` is maintained by Betaflight / blackbox-tools.
+- It converts raw Blackbox flight logs into CSV.
+- Keeping it external avoids bundling a separate GPL-licensed binary inside AeroTune.
+- CSV exports remain the safest fallback for all users.
+
+The UI now shows both:
+
+```text
+Converter Report
+Parser Report
+```
+
+This makes failures easier to understand. For example, if a raw `.bfl` file fails, AeroTune can tell whether the problem is missing converter setup, failed conversion, or parser column detection.
+
 ## What AeroTune Detects
 
 AeroTune currently identifies:
@@ -260,7 +325,7 @@ setpoint_roll, setpoint_pitch, setpoint_yaw, throttle
 
 This helps keep analysis consistent across logs with different column names or large exported files.
 
-Note: AeroTune currently expects CSV exports, not raw `.bbl` files. To use a Betaflight Blackbox log, open it in Betaflight Blackbox Explorer and export the log as CSV first.
+Note: CSV exports still work without any extra tool. Raw `.bbl`, `.bfl`, and `.txt` Blackbox logs require `blackbox_decode` to be installed locally or available through `BLACKBOX_DECODE_PATH`.
 
 ---
 
@@ -427,11 +492,11 @@ Status: partially implemented.
 
 Goal: detect common Betaflight / Blackbox Explorer column variants and show a clear parser report explaining what was found.
 
-### V1.3 — Native `.bbl` / `.bfl` upload support
+### V1.3 — Native `.bbl` / `.bfl` / `.txt` upload support
 
-Status: planned.
+Status: implemented as a local-converter workflow.
 
-Goal: allow raw Blackbox logs to be uploaded, converted to CSV internally, then analyzed by AeroTune.
+Goal: allow raw Blackbox logs to be uploaded, converted to CSV through `blackbox_decode`, then analyzed by AeroTune.
 
 ### V1.4 — Multi-log comparison
 

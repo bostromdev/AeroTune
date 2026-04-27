@@ -5,7 +5,7 @@ from typing import Optional
 
 import numpy as np
 from fastapi import FastAPI, File, Form, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.analyzer import (
@@ -14,6 +14,7 @@ from app.analyzer import (
     normalize_drone_size,
     normalize_goal,
 )
+from app.converter import ConverterError, SUPPORTED_UPLOAD_EXTENSIONS, prepare_analysis_file
 from app.log_validator import validate_log
 from app.parser import optimize_csv_file_with_report, parse_log_with_report
 
@@ -22,15 +23,19 @@ app = FastAPI(title="AeroTune")
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+OPTIMIZED_DIR = UPLOAD_DIR / "_optimized"
+OPTIMIZED_DIR.mkdir(parents=True, exist_ok=True)
 
 LAST_FILE_PATH: Optional[Path] = None
+LAST_SOURCE_FILE_PATH: Optional[Path] = None
+LAST_OPTIMIZED_PATH: Optional[Path] = None
 LAST_OPTIMIZED_CSV: Optional[str] = None
 LAST_OPTIMIZED_NAME: str = "aerotune_optimized.csv"
 
 # AeroTune can analyze many sizes. Analyzer bands currently fall back safely for unsupported values.
 ALLOWED_DRONE_SIZES = set(PUBLIC_DRONE_SIZE_OPTIONS)
 
-# Local-first tool: large Blackbox CSV files are normal.
+# Local-first tool: large Blackbox CSV/raw files are normal.
 MAX_UPLOAD_SIZE_BYTES = 250 * 1024 * 1024
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -49,39 +54,32 @@ def safe_filename(filename: str | None) -> str:
     return cleaned or "upload.csv"
 
 
-def csv_extension_error(filename: str | None):
+def unsupported_upload_error(filename: str | None):
     suffix = Path(filename or "").suffix.lower()
-    parser_report = {
+    converter_report = {
         "ok": False,
-        "filename": safe_filename(filename),
-        "file_type": suffix or "unknown",
-        "stage": "file_type",
-        "message": "AeroTune V1.1/V1.2 only accepts Betaflight CSV exports. Raw .bbl/.bfl support is planned for V1.3.",
-        "error_code": "not_csv",
-        "header_row": None,
-        "metadata_rows_skipped": 0,
-        "repeated_header_rows_removed": 0,
-        "raw_columns_count": 0,
-        "raw_columns_preview": [],
-        "detected_columns": {
-            "time": None,
-            "gyro": {"roll": None, "pitch": None, "yaw": None},
-            "setpoint": {"roll": None, "pitch": None, "yaw": None},
-            "throttle": None,
-        },
-        "missing_required": ["time", "gyro_x", "gyro_y", "gyro_z"],
-        "missing_optional": ["setpoint_roll", "setpoint_pitch", "setpoint_yaw", "throttle"],
-        "sample_rate_hz": None,
+        "converted": False,
+        "source_filename": safe_filename(filename),
+        "source_file_type": suffix or "unknown",
+        "analysis_path": None,
+        "analysis_filename": None,
+        "tool": "blackbox_decode",
+        "tool_path": None,
+        "command": [],
         "duration_seconds": None,
-        "usable_rows": 0,
-        "total_rows_read": 0,
+        "stdout": "",
+        "stderr": "",
+        "returncode": None,
+        "generated_csv_files": [],
+        "message": "Unsupported file type. Upload a Betaflight CSV, .bbl, .bfl, or .txt Blackbox log.",
+        "error_code": "unsupported_file_type",
         "warnings": [],
         "suggestions": [
-            "Export the log as CSV from Betaflight Blackbox Explorer.",
-            "Use .bbl/.bfl files after the V1.3 converter is added.",
+            "Use a Betaflight CSV export for direct analysis.",
+            "Use .bbl, .bfl, or .txt only after blackbox_decode is installed locally.",
         ],
     }
-    return error_response(parser_report["message"], 400, parser_report=parser_report)
+    return error_response(converter_report["message"], 400, converter_report=converter_report)
 
 
 def save_upload(file: UploadFile) -> Path:
@@ -114,6 +112,26 @@ def save_upload(file: UploadFile) -> Path:
 
             buffer.write(chunk)
 
+    return path
+
+
+def _unique_output_path(filename: str) -> Path:
+    OPTIMIZED_DIR.mkdir(parents=True, exist_ok=True)
+    path = OPTIMIZED_DIR / safe_filename(filename)
+    stem = path.stem
+    ext = path.suffix or ".csv"
+    suffix = 1
+
+    while path.exists():
+        path = OPTIMIZED_DIR / f"{stem}_{suffix}{ext}"
+        suffix += 1
+
+    return path
+
+
+def save_optimized_dataframe(df, filename: str) -> Path:
+    path = _unique_output_path(filename)
+    df.to_csv(path, index=False)
     return path
 
 
@@ -192,14 +210,14 @@ async def upload_log(
     drone_size: str = Form("7"),
     tuning_goal: str = Form("efficient"),
 ):
-    global LAST_FILE_PATH, LAST_OPTIMIZED_CSV, LAST_OPTIMIZED_NAME
+    global LAST_FILE_PATH, LAST_SOURCE_FILE_PATH, LAST_OPTIMIZED_PATH, LAST_OPTIMIZED_CSV, LAST_OPTIMIZED_NAME
 
     try:
         if not file.filename:
             return error_response("No file selected.", 400)
 
-        if not file.filename.lower().endswith(".csv"):
-            return csv_extension_error(file.filename)
+        if Path(file.filename).suffix.lower() not in SUPPORTED_UPLOAD_EXTENSIONS:
+            return unsupported_upload_error(file.filename)
 
         size_key = normalize_drone_size(drone_size)
         if size_key is None or size_key not in ALLOWED_DRONE_SIZES:
@@ -212,29 +230,46 @@ async def upload_log(
         goal = normalize_goal(tuning_goal)
 
         saved_path = save_upload(file)
-        LAST_FILE_PATH = saved_path
+        LAST_SOURCE_FILE_PATH = saved_path
 
-        parsed = parse_log_with_report(saved_path)
+        try:
+            analysis_path, converter_report = prepare_analysis_file(saved_path)
+        except ConverterError as exc:
+            return error_response(str(exc), 400, converter_report=exc.report)
+
+        LAST_FILE_PATH = analysis_path
+
+        parsed = parse_log_with_report(analysis_path)
         if parsed.df is None or parsed.df.empty:
             return error_response(
                 parsed.report.get("message", "Could not parse CSV."),
                 400,
+                converter_report=converter_report,
                 parser_report=parsed.report,
             )
 
         df = parsed.df
-        LAST_OPTIMIZED_CSV = df.to_csv(index=False)
         LAST_OPTIMIZED_NAME = f"{saved_path.stem}_aerotune_ready.csv"
+        LAST_OPTIMIZED_PATH = save_optimized_dataframe(df, LAST_OPTIMIZED_NAME)
+        LAST_OPTIMIZED_CSV = None
 
         validation = validate_log(df)
         analysis = detect_oscillation(df, drone_size=size_key, tuning_goal=goal)
 
         return {
             "filename": saved_path.name,
+            "source_filename": saved_path.name,
+            "source_file_type": saved_path.suffix.lower(),
+            "analysis_filename": analysis_path.name,
+            "converted": bool(converter_report.get("converted")),
+            "download_available": True,
+            "download_filename": LAST_OPTIMIZED_PATH.name if LAST_OPTIMIZED_PATH else LAST_OPTIMIZED_NAME,
+            "download_url": "/download-optimized",
             "rows": int(len(df)),
             "columns": list(df.columns),
             "optimized_available": True,
             "optimized_columns": list(df.columns),
+            "converter_report": converter_report,
             "parser_report": parsed.report,
             "validation": validation,
             "analysis": analysis,
@@ -255,36 +290,49 @@ async def upload_log(
 
 @app.post("/optimize-log")
 async def optimize_log(file: UploadFile = File(...)):
-    global LAST_OPTIMIZED_CSV, LAST_OPTIMIZED_NAME
+    global LAST_OPTIMIZED_PATH, LAST_OPTIMIZED_CSV, LAST_OPTIMIZED_NAME
 
     try:
         if not file.filename:
             return error_response("No file selected.", 400)
 
-        if not file.filename.lower().endswith(".csv"):
-            return csv_extension_error(file.filename)
+        if Path(file.filename).suffix.lower() not in SUPPORTED_UPLOAD_EXTENSIONS:
+            return unsupported_upload_error(file.filename)
 
         saved_path = save_upload(file)
-        parsed = optimize_csv_file_with_report(saved_path)
+
+        try:
+            analysis_path, converter_report = prepare_analysis_file(saved_path)
+        except ConverterError as exc:
+            return error_response(str(exc), 400, converter_report=exc.report)
+
+        parsed = optimize_csv_file_with_report(analysis_path)
 
         if parsed.df is None or parsed.df.empty:
             return error_response(
                 parsed.report.get("message", "Could not optimize CSV."),
                 400,
+                converter_report=converter_report,
                 parser_report=parsed.report,
             )
 
         df = parsed.df
-        LAST_OPTIMIZED_CSV = df.to_csv(index=False)
         LAST_OPTIMIZED_NAME = f"{Path(safe_filename(file.filename)).stem}_aerotune_ready.csv"
+        LAST_OPTIMIZED_PATH = save_optimized_dataframe(df, LAST_OPTIMIZED_NAME)
+        LAST_OPTIMIZED_CSV = None
 
         return {
             "ok": True,
             "filename": saved_path.name,
-            "download_filename": LAST_OPTIMIZED_NAME,
+            "source_filename": saved_path.name,
+            "source_file_type": saved_path.suffix.lower(),
+            "analysis_filename": analysis_path.name,
+            "converted": bool(converter_report.get("converted")),
+            "download_filename": LAST_OPTIMIZED_PATH.name,
+            "download_url": "/download-optimized",
             "rows": int(len(df)),
             "columns": list(df.columns),
-            "optimized_csv": LAST_OPTIMIZED_CSV,
+            "converter_report": converter_report,
             "parser_report": parsed.report,
         }
 
@@ -303,10 +351,17 @@ async def optimize_log(file: UploadFile = File(...)):
 
 @app.get("/download-optimized")
 def download_optimized():
-    if not LAST_OPTIMIZED_CSV:
-        return error_response("No optimized CSV available yet. Upload and analyze a log first.", 400)
+    if LAST_OPTIMIZED_PATH is not None and LAST_OPTIMIZED_PATH.exists():
+        return FileResponse(
+            LAST_OPTIMIZED_PATH,
+            media_type="text/csv",
+            filename=LAST_OPTIMIZED_PATH.name,
+        )
 
-    return optimized_csv_response(LAST_OPTIMIZED_CSV, LAST_OPTIMIZED_NAME)
+    if LAST_OPTIMIZED_CSV:
+        return optimized_csv_response(LAST_OPTIMIZED_CSV, LAST_OPTIMIZED_NAME)
+
+    return error_response("No optimized CSV available yet. Upload and analyze a log first.", 400)
 
 
 @app.get("/plot")
