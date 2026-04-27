@@ -276,8 +276,10 @@ $BLACKBOX_DECODE_PATH --help
 
 Why the converter is separate:
 
-- `blackbox_decode` is maintained by Betaflight / blackbox-tools.
-- It converts raw Blackbox flight logs into CSV.
+- `blackbox_decode` is part of Betaflight / blackbox-tools.
+- The `blackbox_decode` help output credits Nicholas Sherlock as the Blackbox flight log decoder author.
+- AeroTune uses `blackbox_decode` only as an optional local converter for raw `.bbl`, `.bfl`, and `.txt` logs.
+- AeroTune does not bundle or redistribute the `blackbox_decode` binary.
 - Keeping it external avoids bundling a separate GPL-licensed binary inside AeroTune.
 - CSV exports remain the safest fallback for all users.
 
