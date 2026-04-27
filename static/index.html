@@ -250,6 +250,92 @@
       max-height: 480px;
     }
 
+
+
+    .useful-summary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .summary-box {
+      border: 1px solid var(--line);
+      background: #0c171d;
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    .summary-box.full {
+      grid-column: 1 / -1;
+    }
+
+    .summary-box b {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .summary-box .big-read {
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+    }
+
+    .summary-list {
+      margin: 6px 0 0;
+      padding-left: 18px;
+      color: #cce7ef;
+      line-height: 1.45;
+    }
+
+    .summary-list li {
+      margin: 5px 0;
+    }
+
+    .pid-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .pid-term {
+      border: 1px solid var(--line);
+      background: #091318;
+      border-radius: 12px;
+      padding: 10px;
+      text-align: center;
+    }
+
+    .pid-term .term {
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .pid-term .delta {
+      font-size: 20px;
+      font-weight: 900;
+      margin-top: 4px;
+    }
+
+    .pid-term.up .delta { color: var(--good); }
+    .pid-term.down .delta { color: var(--bad); }
+    .pid-term.same .delta { color: var(--muted); }
+
+    .move-list {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      color: #cce7ef;
+      line-height: 1.45;
+    }
+
+    .move-list li { margin: 5px 0; }
+
     .axis-card {
       border: 1px solid var(--line);
       background: #0c171d;
@@ -286,8 +372,10 @@
       .grid { grid-template-columns: 1fr; }
       .metric-grid { grid-template-columns: 1fr; }
       .report { grid-template-columns: 1fr; }
+      .useful-summary { grid-template-columns: 1fr; }
     }
   </style>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
 </head>
 <body>
   <div class="wrap">
@@ -381,6 +469,7 @@
             </div>
           </div>
           <div id="summary" class="message" style="margin-top:12px;">Upload a CSV to start analysis.</div>
+          <div id="usefulSummary" class="useful-summary"></div>
         </div>
 
         <div class="card">
@@ -409,6 +498,7 @@
     const parserSuggestions = document.getElementById("parserSuggestions");
 
     const summary = document.getElementById("summary");
+    const usefulSummary = document.getElementById("usefulSummary");
     const rowsMetric = document.getElementById("rowsMetric");
     const rateMetric = document.getElementById("rateMetric");
     const durationMetric = document.getElementById("durationMetric");
@@ -486,11 +576,20 @@
     }
 
     function findAxisData(analysis) {
-      if (!analysis) return [];
+      if (!analysis || typeof analysis !== "object") return [];
 
       if (Array.isArray(analysis.axes)) return analysis.axes;
+
+      if (analysis.axes && typeof analysis.axes === "object") {
+        return Object.entries(analysis.axes).map(([axis, data]) => ({ axis, ...(data || {}) }));
+      }
+
       if (analysis.axis_analysis && typeof analysis.axis_analysis === "object") {
-        return Object.entries(analysis.axis_analysis).map(([axis, data]) => ({ axis, ...data }));
+        return Object.entries(analysis.axis_analysis).map(([axis, data]) => ({ axis, ...(data || {}) }));
+      }
+
+      if (Array.isArray(analysis.recommendations)) {
+        return analysis.recommendations.map((item) => ({ axis: item.axis || item.axis_name || "axis", ...(item || {}) }));
       }
 
       const axes = [];
@@ -510,37 +609,197 @@
       return String(value);
     }
 
+    function percentText(value) {
+      const num = Number(value || 0);
+      if (!Number.isFinite(num) || Math.abs(num) < 0.0005) return "0%";
+      const pct = num * 100;
+      const sign = pct > 0 ? "+" : "";
+      return `${sign}${pct.toFixed(1)}%`;
+    }
+
+    function pidClass(value) {
+      const num = Number(value || 0);
+      if (num > 0.0005) return "up";
+      if (num < -0.0005) return "down";
+      return "same";
+    }
+
+    function renderPidGrid(pidDelta) {
+      const delta = pidDelta || {};
+      const terms = ["p", "i", "d", "ff"];
+
+      return `
+        <div class="pid-grid">
+          ${terms.map(term => `
+            <div class="pid-term ${pidClass(delta[term])}">
+              <div class="term">${term.toUpperCase()}</div>
+              <div class="delta">${percentText(delta[term])}</div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function renderMoves(moves) {
+      const list = Array.isArray(moves) ? moves : [];
+      if (!list.length) return "";
+      return `
+        <h3 style="margin-top:12px;">PID tuning notes</h3>
+        <ul class="move-list">
+          ${list.map(move => `<li>${shortText(move)}</li>`).join("")}
+        </ul>
+      `;
+    }
+
+    function axisList(analysis) {
+      return findAxisData(analysis);
+    }
+
+    function signedPct(value) {
+      const num = Number(value || 0);
+      if (!Number.isFinite(num) || Math.abs(num) < 0.0005) return null;
+      const pct = num * 100;
+      return `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%`;
+    }
+
+    function usefulPidMove(axisData) {
+      const delta = axisData.pid_delta_pct || {};
+      const terms = ["p", "i", "d", "ff"]
+        .map(term => {
+          const pct = signedPct(delta[term]);
+          return pct ? `${term.toUpperCase()} ${pct}` : null;
+        })
+        .filter(Boolean);
+
+      if (!terms.length) return `${(axisData.axis_name || axisData.axis || "axis").toString().toUpperCase()}: no PID change`;
+      return `${(axisData.axis_name || axisData.axis || "axis").toString().toUpperCase()}: ${terms.join(", ")}`;
+    }
+
+    function worstAxes(axes) {
+      const severityWeight = {
+        warning: 4,
+        attention: 3,
+        watch: 2,
+        good: 0,
+      };
+
+      return [...axes].sort((a, b) => {
+        const aScore = (severityWeight[a.severity] ?? 1) + Number(a.confidence || 0);
+        const bScore = (severityWeight[b.severity] ?? 1) + Number(b.confidence || 0);
+        return bScore - aScore;
+      });
+    }
+
+    function box(title, html, extraClass = "") {
+      return `<div class="summary-box ${extraClass}"><b>${title}</b>${html}</div>`;
+    }
+
+    function renderUsefulSummary(data) {
+      if (!usefulSummary) return;
+
+      const analysis = data.analysis || {};
+      const report = data.parser_report || {};
+      const axes = axisList(analysis);
+      const ranked = worstAxes(axes);
+      const problemAxes = ranked.filter(axis => axis.issue && axis.issue !== "clean");
+      const primary = problemAxes[0] || ranked[0];
+
+      const mainRead = primary
+        ? `${(primary.axis_name || primary.axis || "AXIS").toString().toUpperCase()}: ${primary.issue_label || primary.issue || "Review"}`
+        : (analysis.summary || "No axis summary available.");
+
+      const pidMoves = ranked.map(usefulPidMove).slice(0, 3);
+      const cautionItems = [];
+      const nextItems = [];
+
+      if (problemAxes.some(axis => ["high_frequency_noise", "mid_frequency_vibration", "mechanical_noise_suspected"].includes(axis.issue))) {
+        cautionItems.push("Check props, motor screws, motor bells, frame cracks, and stack mounting before chasing PID.");
+      }
+
+      if (ranked.some(axis => Number(axis.pid_delta_pct?.d || 0) > 0)) {
+        cautionItems.push("D is being raised somewhere. After the change, land and check motor temperature.");
+      }
+
+      if (ranked.some(axis => axis.propwash_detected)) {
+        cautionItems.push("Propwash detected. Retest with the same dives, turns, throttle chops, or dirty-air recovery moves.");
+      }
+
+      if (!analysis.valid_for_pid) {
+        cautionItems.push("Analyzer did not mark this as strongly valid for PID changes. Treat the recommendation as low confidence.");
+      }
+
+      if (!cautionItems.length) {
+        cautionItems.push("No major caution flags. Still change one thing at a time and retest.");
+      }
+
+      nextItems.push("Apply only the biggest useful PID move first, not every small delta at once.");
+      nextItems.push("Fly the same 60–90 second Blackbox test route again.");
+      nextItems.push("Save the next CSV as an after-tune log for V1.4 comparison.");
+
+      const signalReads = ranked.slice(0, 3).map(axis => {
+        const signal = axis.signal || {};
+        const tracking = axis.tracking || {};
+        const dom = signal.dominant_freq_hz ? `${signal.dominant_freq_hz} Hz` : "no strong peak";
+        const lag = tracking.lag_ms !== null && tracking.lag_ms !== undefined ? `${tracking.lag_ms} ms lag` : "lag unknown";
+        return `${(axis.axis_name || axis.axis || "AXIS").toString().toUpperCase()}: ${dom}, error ratio ${valueOrDash(signal.error_ratio)}, ${lag}`;
+      });
+
+      usefulSummary.innerHTML = [
+        box("Main tune read", `<div class="big-read">${mainRead}</div><div class="small" style="margin-top:8px;">${shortText(analysis.summary || "")}</div>`, "full"),
+        box("Best first PID move", `<ul class="summary-list">${pidMoves.map(item => `<li>${item}</li>`).join("")}</ul>`),
+        box("Data quality", `<ul class="summary-list">
+          <li>${valueOrDash(report.usable_rows || data.rows)} usable rows</li>
+          <li>${valueOrDash(report.sample_rate_hz || analysis.sample_rate_hz, " Hz")} sample rate</li>
+          <li>${valueOrDash(report.duration_seconds || analysis.duration_s, " s")} duration</li>
+          <li>${shortText(analysis.drone_size_label || "Drone size profile not reported")}</li>
+        </ul>`),
+        box("Signal / tracking clues", `<ul class="summary-list">${signalReads.map(item => `<li>${item}</li>`).join("")}</ul>`, "full"),
+        box("Cautions", `<ul class="summary-list">${cautionItems.map(item => `<li>${item}</li>`).join("")}</ul>`),
+        box("Next test", `<ul class="summary-list">${nextItems.map(item => `<li>${item}</li>`).join("")}</ul>`),
+      ].join("");
+    }
+
     function renderAnalysis(data) {
       lastAnalysis = data;
       machineOutput.textContent = JSON.stringify(data, null, 2);
       axisCards.innerHTML = "";
 
-      const report = data.parser_report;
       const grade = data.validation?.grade || data.validation?.status || "analysis complete";
-      setMessage(summary, `${data.filename || "CSV"} analyzed. ${data.rows || 0} usable rows. Log grade/status: ${grade}.`, "good");
+      const analysisSummary = data.analysis?.summary ? ` ${data.analysis.summary}` : "";
+      setMessage(summary, `${data.filename || "CSV"} analyzed. ${data.rows || 0} usable rows. Log grade/status: ${grade}.${analysisSummary}`, "good");
+      renderUsefulSummary(data);
 
       const axes = findAxisData(data.analysis);
       if (!axes.length) {
-        axisCards.innerHTML = `<div class="message warn">Analysis returned, but no axis-card structure was detected. Machine output is shown below.</div>`;
+        axisCards.innerHTML = `<div class="message warn">Analysis returned, but no roll/pitch/yaw PID card data was detected. Machine output is shown below.</div>`;
         return;
       }
 
       axes.forEach(axisData => {
-        const axisName = (axisData.axis || axisData.name || "axis").toString().toUpperCase();
-        const issue = axisData.issue || axisData.feel || axisData.main_issue || axisData.status || "Review machine output";
-        const confidence = axisData.confidence !== undefined ? `Confidence: ${axisData.confidence}` : "";
-        const recommendation = axisData.recommendation || axisData.what_to_try || axisData.pid_recommendation || axisData.change || "";
-        const why = axisData.why || axisData.reason || axisData.main_read || "";
+        const axisName = (axisData.axis_name || axisData.axis || axisData.name || "axis").toString().toUpperCase();
+        const issueLabel = axisData.issue_label || axisData.issue || axisData.feel || axisData.status || "Review";
+        const confidence = axisData.confidence !== undefined ? `Confidence: ${axisData.confidence}` : "Confidence: —";
+        const recommendation = axisData.recommendation_text || axisData.recommendation || axisData.what_to_try || axisData.pid_recommendation || "";
+        const why = axisData.confidence_reason || axisData.why || axisData.reason || axisData.main_read || "";
+        const pidDelta = axisData.pid_delta_pct || {};
+        const moves = axisData.tuning_moves || [];
 
         const card = document.createElement("div");
         card.className = "axis-card";
         card.innerHTML = `
           <div class="axis-head">
             <div class="axis-title">${axisName}</div>
-            <span class="chip">${confidence}</span>
+            <span class="chip ${axisData.propwash_detected ? "warn" : ""}">${confidence}</span>
           </div>
-          <div class="message">${shortText(issue)}</div>
-          ${recommendation ? `<h3 style="margin-top:12px;">What to try</h3><div class="small">${shortText(recommendation)}</div>` : ""}
+
+          <div class="message ${axisData.severity === "good" ? "good" : axisData.severity === "warning" ? "bad" : "warn"}">
+            <b>${shortText(issueLabel)}</b><br>
+            ${shortText(recommendation)}
+          </div>
+
+          ${renderPidGrid(pidDelta)}
+          ${renderMoves(moves)}
+
           ${why ? `<h3 style="margin-top:12px;">Why</h3><div class="small">${shortText(why)}</div>` : ""}
         `;
         axisCards.appendChild(card);
@@ -575,6 +834,7 @@
       analyzeBtn.disabled = true;
       downloadAnalyzed.classList.add("hidden");
       setMessage(summary, "Analyzing log...", "warn");
+      if (usefulSummary) usefulSummary.innerHTML = "";
 
       try {
         const response = await fetch("/upload-log", { method: "POST", body: formData });
@@ -583,6 +843,7 @@
         if (!response.ok) {
           renderParserReport(data.parser_report);
           setMessage(summary, data.error || "Analysis failed.", "bad");
+          if (usefulSummary) usefulSummary.innerHTML = "";
           machineOutput.textContent = JSON.stringify(data, null, 2);
           axisCards.innerHTML = "";
           return;
