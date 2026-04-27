@@ -252,6 +252,60 @@
 
 
 
+
+    .comparison-panel {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .comparison-headline {
+      border: 1px solid var(--line);
+      background: #0c171d;
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .comparison-headline .verdict {
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      margin-top: 4px;
+    }
+
+    .axis-compare-card {
+      border: 1px solid var(--line);
+      background: #0c171d;
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .compare-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .compare-metric {
+      border: 1px solid var(--line);
+      background: #091318;
+      border-radius: 12px;
+      padding: 10px;
+    }
+
+    .compare-metric b {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .score.good { color: var(--good); }
+    .score.warn { color: var(--warn); }
+    .score.bad { color: var(--bad); }
+
     .useful-summary {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -373,6 +427,7 @@
       .metric-grid { grid-template-columns: 1fr; }
       .report { grid-template-columns: 1fr; }
       .useful-summary { grid-template-columns: 1fr; }
+      .compare-metrics { grid-template-columns: 1fr; }
     }
   </style>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
@@ -442,6 +497,25 @@
           <div id="optimizerStatus" class="message">No optimizer/converter job yet.</div>
         </div>
 
+        <div class="card">
+          <h2>V1.4 Before / After Comparison</h2>
+          <p class="small">
+            Upload a before-tune log and an after-tune log. Use the same drone size and tune goal selected above.
+          </p>
+
+          <form id="compareForm">
+            <label for="beforeLogFile">Before Tune Log</label>
+            <input id="beforeLogFile" name="before_file" type="file" accept=".csv,.bbl,.bfl,.txt,text/csv" required />
+
+            <label for="afterLogFile">After Tune Log</label>
+            <input id="afterLogFile" name="after_file" type="file" accept=".csv,.bbl,.bfl,.txt,text/csv" required />
+
+            <button id="compareBtn" type="submit">Compare Before → After</button>
+          </form>
+
+          <div id="compareStatus" class="message">No comparison yet.</div>
+        </div>
+
 
         <div class="card">
           <h2>Converter Report</h2>
@@ -482,6 +556,14 @@
         </div>
 
         <div class="card">
+          <h2>V1.4 Comparison Result</h2>
+          <div id="comparisonResult" class="message">Upload before/after logs to compare tune changes.</div>
+          <div id="comparisonPanel" class="comparison-panel"></div>
+          <h3 style="margin-top:16px;">Comparison Machine Output</h3>
+          <pre id="comparisonMachineOutput">No comparison yet.</pre>
+        </div>
+
+        <div class="card">
           <h2>Pilot Tune Notes</h2>
           <div class="chips">
             <button class="secondary" id="copyCards" type="button">Copy Cards</button>
@@ -498,8 +580,10 @@
   <script>
     const analyzeForm = document.getElementById("analyzeForm");
     const optimizeForm = document.getElementById("optimizeForm");
+    const compareForm = document.getElementById("compareForm");
     const analyzeBtn = document.getElementById("analyzeBtn");
     const optimizeBtn = document.getElementById("optimizeBtn");
+    const compareBtn = document.getElementById("compareBtn");
 
     const parserStatus = document.getElementById("parserStatus");
     const parserReport = document.getElementById("parserReport");
@@ -519,6 +603,10 @@
     const axisCards = document.getElementById("axisCards");
     const machineOutput = document.getElementById("machineOutput");
     const optimizerStatus = document.getElementById("optimizerStatus");
+    const compareStatus = document.getElementById("compareStatus");
+    const comparisonResult = document.getElementById("comparisonResult");
+    const comparisonPanel = document.getElementById("comparisonPanel");
+    const comparisonMachineOutput = document.getElementById("comparisonMachineOutput");
     const downloadAnalyzed = document.getElementById("downloadAnalyzed");
 
     let lastAnalysis = null;
@@ -806,6 +894,106 @@
       ].join("");
     }
 
+    function scoreClass(value) {
+      const num = Number(value || 0);
+      if (num >= 8) return "good";
+      if (num <= -8) return "bad";
+      return "warn";
+    }
+
+    function verdictMessageKind(verdict) {
+      if (verdict === "improved") return "good";
+      if (verdict === "worse") return "bad";
+      return "warn";
+    }
+
+    function formatScore(value) {
+      const num = Number(value || 0);
+      const sign = num > 0 ? "+" : "";
+      return `${sign}${num.toFixed(1)}%`;
+    }
+
+    function formatMetricChange(label, change) {
+      const before = valueOrDash(change?.before);
+      const after = valueOrDash(change?.after);
+      const improvement = change?.improvement_pct === null || change?.improvement_pct === undefined
+        ? "—"
+        : formatScore(change.improvement_pct);
+      const kind = scoreClass(change?.improvement_pct || 0);
+
+      return `
+        <div class="compare-metric">
+          <b>${label}</b>
+          <div>Before: ${before}</div>
+          <div>After: ${after}</div>
+          <div class="score ${kind}">Improvement: ${improvement}</div>
+        </div>
+      `;
+    }
+
+    function renderComparison(data) {
+      if (!comparisonPanel || !comparisonResult || !comparisonMachineOutput) return;
+
+      comparisonMachineOutput.textContent = JSON.stringify(data, null, 2);
+      comparisonPanel.innerHTML = "";
+
+      const comparison = data.comparison || {};
+      if (!comparison || !comparison.axes) {
+        setMessage(comparisonResult, data.error || "Comparison did not return axis data.", "bad");
+        return;
+      }
+
+      setMessage(
+        comparisonResult,
+        `${comparison.overall_verdict || "comparison complete"} — ${comparison.summary || ""}`,
+        verdictMessageKind(comparison.overall_verdict)
+      );
+
+      const headline = document.createElement("div");
+      headline.className = "comparison-headline";
+      headline.innerHTML = `
+        <b>Overall comparison</b>
+        <div class="verdict score ${scoreClass(comparison.overall_score_pct)}">${formatScore(comparison.overall_score_pct)} ${shortText(comparison.overall_verdict || "")}</div>
+        <div class="small" style="margin-top:8px;">Confidence: ${valueOrDash(comparison.confidence)}</div>
+        <div class="small" style="margin-top:8px;">Next: ${shortText(comparison.next_step || "")}</div>
+      `;
+      comparisonPanel.appendChild(headline);
+
+      const axes = comparison.axes || {};
+      ["roll", "pitch", "yaw"].forEach(axisName => {
+        const axis = axes[axisName];
+        if (!axis) return;
+
+        const changes = axis.metric_changes || {};
+        const card = document.createElement("div");
+        card.className = "axis-compare-card";
+        card.innerHTML = `
+          <div class="axis-head">
+            <div class="axis-title">${axisName.toUpperCase()}</div>
+            <span class="chip ${scoreClass(axis.score_pct)}">${formatScore(axis.score_pct)} ${shortText(axis.verdict || "")}</span>
+          </div>
+
+          <div class="message ${verdictMessageKind(axis.verdict)}">${shortText(axis.read || "")}</div>
+
+          <div class="compare-metrics">
+            ${formatMetricChange("Tracking error", changes.tracking_error_ratio || {})}
+            ${formatMetricChange("Propwash band", changes.propwash_ratio || {})}
+            ${formatMetricChange("High noise", changes.high_noise_ratio || {})}
+            ${formatMetricChange("P95 error", changes.abs_error_p95 || {})}
+            ${formatMetricChange("Lag", changes.lag_abs_ms || {})}
+          </div>
+        `;
+        comparisonPanel.appendChild(card);
+      });
+
+      if (Array.isArray(comparison.warnings) && comparison.warnings.length) {
+        const warn = document.createElement("div");
+        warn.className = "message warn";
+        warn.innerHTML = `<b>Comparison notes</b><ul class="summary-list">${comparison.warnings.map(w => `<li>${shortText(w)}</li>`).join("")}</ul>`;
+        comparisonPanel.appendChild(warn);
+      }
+    }
+
     function renderAnalysis(data) {
       lastAnalysis = data;
       machineOutput.textContent = JSON.stringify(data, null, 2);
@@ -934,6 +1122,39 @@
         setMessage(optimizerStatus, error.message || String(error), "bad");
       } finally {
         optimizeBtn.disabled = false;
+      }
+    });
+
+    compareForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const formData = new FormData(compareForm);
+      formData.set("drone_size", document.getElementById("droneSize").value);
+      formData.set("tuning_goal", document.getElementById("tuningGoal").value);
+
+      compareBtn.disabled = true;
+      setMessage(compareStatus, "Comparing before/after logs...", "warn");
+      setMessage(comparisonResult, "Comparison running...", "warn");
+      if (comparisonPanel) comparisonPanel.innerHTML = "";
+
+      try {
+        const response = await fetch("/compare-logs", { method: "POST", body: formData });
+        const data = await readJsonResponse(response);
+
+        if (!response.ok) {
+          setMessage(compareStatus, data.error || "Comparison failed.", "bad");
+          setMessage(comparisonResult, data.error || "Comparison failed.", "bad");
+          if (comparisonMachineOutput) comparisonMachineOutput.textContent = JSON.stringify(data, null, 2);
+          return;
+        }
+
+        setMessage(compareStatus, "Comparison complete.", "good");
+        renderComparison(data);
+      } catch (error) {
+        setMessage(compareStatus, error.message || String(error), "bad");
+        setMessage(comparisonResult, error.message || String(error), "bad");
+      } finally {
+        compareBtn.disabled = false;
       }
     });
 

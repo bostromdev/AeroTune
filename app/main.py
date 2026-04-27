@@ -14,6 +14,7 @@ from app.analyzer import (
     normalize_drone_size,
     normalize_goal,
 )
+from app.comparison import ComparisonError, build_multilog_comparison
 from app.converter import ConverterError, SUPPORTED_UPLOAD_EXTENSIONS, prepare_analysis_file
 from app.log_validator import validate_log
 from app.parser import optimize_csv_file_with_report, parse_log_with_report
@@ -347,6 +348,170 @@ async def optimize_log(file: UploadFile = File(...)):
             file.file.close()
         except Exception:
             pass
+
+
+@app.post("/compare-logs")
+async def compare_logs(
+    before_file: UploadFile = File(...),
+    after_file: UploadFile = File(...),
+    drone_size: str = Form("7"),
+    tuning_goal: str = Form("efficient"),
+):
+    """
+    V1.4 before/after comparison endpoint.
+
+    Accepts two supported AeroTune inputs:
+    - before_file: baseline log before a PID/filter/rate change
+    - after_file: follow-up log after the tune change
+
+    Each file can be a direct CSV export or a raw .bbl/.bfl/.txt Blackbox log
+    when blackbox_decode is installed locally.
+    """
+    try:
+        if not before_file.filename:
+            return error_response("Before log is missing.", 400)
+        if not after_file.filename:
+            return error_response("After log is missing.", 400)
+
+        if Path(before_file.filename).suffix.lower() not in SUPPORTED_UPLOAD_EXTENSIONS:
+            return unsupported_upload_error(before_file.filename)
+        if Path(after_file.filename).suffix.lower() not in SUPPORTED_UPLOAD_EXTENSIONS:
+            return unsupported_upload_error(after_file.filename)
+
+        size_key = normalize_drone_size(drone_size)
+        if size_key is None or size_key not in ALLOWED_DRONE_SIZES:
+            return error_response(
+                "Invalid drone size. Use 3, 3.5, 4, 5, or 7.",
+                400,
+                allowed_drone_sizes=sorted(ALLOWED_DRONE_SIZES, key=float),
+            )
+
+        goal = normalize_goal(tuning_goal)
+
+        before_saved_path = save_upload(before_file)
+        after_saved_path = save_upload(after_file)
+
+        try:
+            before_analysis_path, before_converter_report = prepare_analysis_file(before_saved_path)
+        except ConverterError as exc:
+            return error_response(
+                f"Before log conversion failed: {exc}",
+                400,
+                before={"converter_report": exc.report},
+            )
+
+        try:
+            after_analysis_path, after_converter_report = prepare_analysis_file(after_saved_path)
+        except ConverterError as exc:
+            return error_response(
+                f"After log conversion failed: {exc}",
+                400,
+                before={"converter_report": before_converter_report},
+                after={"converter_report": exc.report},
+            )
+
+        before_parsed = parse_log_with_report(before_analysis_path)
+        if before_parsed.df is None or before_parsed.df.empty:
+            return error_response(
+                before_parsed.report.get("message", "Could not parse before log."),
+                400,
+                before={
+                    "source_filename": before_saved_path.name,
+                    "analysis_filename": before_analysis_path.name,
+                    "converter_report": before_converter_report,
+                    "parser_report": before_parsed.report,
+                },
+                after={
+                    "source_filename": after_saved_path.name,
+                    "analysis_filename": after_analysis_path.name,
+                    "converter_report": after_converter_report,
+                },
+            )
+
+        after_parsed = parse_log_with_report(after_analysis_path)
+        if after_parsed.df is None or after_parsed.df.empty:
+            return error_response(
+                after_parsed.report.get("message", "Could not parse after log."),
+                400,
+                before={
+                    "source_filename": before_saved_path.name,
+                    "analysis_filename": before_analysis_path.name,
+                    "converter_report": before_converter_report,
+                    "parser_report": before_parsed.report,
+                },
+                after={
+                    "source_filename": after_saved_path.name,
+                    "analysis_filename": after_analysis_path.name,
+                    "converter_report": after_converter_report,
+                    "parser_report": after_parsed.report,
+                },
+            )
+
+        before_df = before_parsed.df
+        after_df = after_parsed.df
+
+        before_validation = validate_log(before_df)
+        after_validation = validate_log(after_df)
+        before_analysis = detect_oscillation(before_df, drone_size=size_key, tuning_goal=goal)
+        after_analysis = detect_oscillation(after_df, drone_size=size_key, tuning_goal=goal)
+
+        try:
+            comparison = build_multilog_comparison(
+                before_df=before_df,
+                after_df=after_df,
+                before_analysis=before_analysis,
+                after_analysis=after_analysis,
+                drone_size=size_key,
+                tuning_goal=goal,
+            )
+        except ComparisonError as exc:
+            return error_response(str(exc), 400)
+
+        return {
+            "ok": True,
+            "version": "V1.4",
+            "message": "Before/after comparison complete.",
+            "drone_size": size_key,
+            "tuning_goal": goal,
+            "before": {
+                "source_filename": before_saved_path.name,
+                "source_file_type": before_saved_path.suffix.lower(),
+                "analysis_filename": before_analysis_path.name,
+                "converted": bool(before_converter_report.get("converted")),
+                "rows": int(len(before_df)),
+                "columns": list(before_df.columns),
+                "converter_report": before_converter_report,
+                "parser_report": before_parsed.report,
+                "validation": before_validation,
+                "analysis": before_analysis,
+            },
+            "after": {
+                "source_filename": after_saved_path.name,
+                "source_file_type": after_saved_path.suffix.lower(),
+                "analysis_filename": after_analysis_path.name,
+                "converted": bool(after_converter_report.get("converted")),
+                "rows": int(len(after_df)),
+                "columns": list(after_df.columns),
+                "converter_report": after_converter_report,
+                "parser_report": after_parsed.report,
+                "validation": after_validation,
+                "analysis": after_analysis,
+            },
+            "comparison": comparison,
+        }
+
+    except ValueError as exc:
+        return error_response(str(exc), 400)
+
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+    finally:
+        for upload in (before_file, after_file):
+            try:
+                upload.file.close()
+            except Exception:
+                pass
 
 
 @app.get("/download-optimized")

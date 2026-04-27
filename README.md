@@ -19,7 +19,7 @@ AeroTune is an early engineering project, not a finished commercial PID tuner.
 
 The goal is to test whether Betaflight Blackbox CSV logs can be translated into useful, feel-based tuning recommendations using known FPV PID tuning principles.
 
-AeroTune supports **Betaflight CSV exports** directly. V1.3 adds optional raw `.bbl`, `.bfl`, and `.txt` upload support by using a locally installed `blackbox_decode` converter.
+AeroTune supports **Betaflight CSV exports** directly. V1.3 adds optional raw `.bbl`, `.bfl`, and `.txt` upload support by using a locally installed `blackbox_decode` converter. V1.4 adds before/after multi-log comparison so pilots can check whether a tune change improved or worsened the flight data.
 
 Some newer Betaflight firmware versions may export CSV files with different column names or structure. AeroTune V1.1 / V1.2 focuses on making the parser stronger and showing clear parser diagnostics instead of failing silently.
 
@@ -141,9 +141,9 @@ This gives AeroTune a better chance to identify real issues like propwash, bounc
 
 ## How to Export Your Blackbox CSV
 
-AeroTune currently analyzes **CSV files**, not raw `.BBL`, `.BFL`, or `.TXT` Blackbox logs directly.
+AeroTune analyzes **CSV files directly**. It can also accept raw `.BBL`, `.BFL`, or `.TXT` Blackbox logs when Betaflight's `blackbox_decode` tool is installed locally.
 
-The easiest beginner workflow is:
+The easiest beginner workflow is still CSV export:
 
 1. Open **Betaflight Blackbox Explorer**.
 2. Click **Open log file/video**.
@@ -152,6 +152,12 @@ The easiest beginner workflow is:
 5. Use **Export CSV**.
 6. Save the exported `.csv` file somewhere easy to find.
 7. Upload that `.csv` into AeroTune.
+
+Raw-log workflow:
+
+1. Build or install `blackbox_decode` locally.
+2. Upload the raw `.bbl`, `.bfl`, or `.txt` file directly.
+3. AeroTune converts it to CSV internally, then runs the normal parser/analyzer.
 
 Recommended naming style:
 
@@ -188,6 +194,7 @@ Advanced users can also use command-line Blackbox tools to decode supported logs
 - Drone size profiles for 3", 3.5", 4", 5", and 7" builds
 - Local-first analysis for privacy and large CSV support
 - Conservative PID percentage-change recommendations
+- V1.4 before/after log comparison for tune validation
 
 ---
 
@@ -211,7 +218,7 @@ Added:
 - Backend `/upload-log` returns `parser_report`
 - Backend `/optimize-log` returns `parser_report`
 - Optimizer now downloads CSV after returning JSON report
-- Raw `.bbl` / `.bfl` rejection now clearly says V1.3 converter is planned
+- Raw `.bbl`, `.bfl`, and `.txt` files now route through the V1.3 converter when `blackbox_decode` is available
 
 This update helps users diagnose:
 
@@ -291,6 +298,65 @@ Parser Report
 ```
 
 This makes failures easier to understand. For example, if a raw `.bfl` file fails, AeroTune can tell whether the problem is missing converter setup, failed conversion, or parser column detection.
+
+
+## V1.4 Multi-Log Comparison
+
+AeroTune V1.4 adds a before/after comparison workflow.
+
+Upload:
+
+```text
+Before tune log
+After tune log
+```
+
+AeroTune analyzes both logs using the same parser, converter, drone-size profile, and tuning goal. It then compares the after log against the before log and answers:
+
+```text
+Did it improve?
+Did it get worse?
+Which axis changed most?
+What metric changed most?
+What should I test next?
+```
+
+V1.4 compares lower-is-better metrics:
+
+- tracking error ratio
+- 95th-percentile absolute error
+- propwash-band energy
+- high-frequency noise ratio
+- absolute tracking lag
+
+The comparison output includes:
+
+- overall verdict
+- overall improvement score
+- comparison confidence
+- roll / pitch / yaw comparison cards
+- strongest improvement axis
+- weakest axis
+- next-step recommendation
+- machine-readable JSON output
+
+Important: before/after comparison only works well when both logs come from similar flights.
+
+Best comparison practice:
+
+```text
+Same drone
+Same battery type
+Same props
+Same tune goal
+Same approximate flight length
+Same test route
+Same kind of throttle punches / turns / propwash recovery
+```
+
+If the two flights are very different, AeroTune will still compare them, but the confidence may be lower.
+
+---
 
 ## What AeroTune Detects
 
@@ -502,9 +568,17 @@ Goal: allow raw Blackbox logs to be uploaded, converted to CSV through `blackbox
 
 ### V1.4 — Multi-log comparison
 
-Status: planned.
+Status: implemented.
 
 Goal: compare before-tune and after-tune logs to determine whether noise, tracking, propwash, bounceback, and control response improved.
+
+Implementation:
+
+- `/compare-logs` endpoint
+- before/after upload UI
+- roll/pitch/yaw comparison cards
+- overall improvement score
+- confidence notes and next-step guidance
 
 ### V1.5 — Tune-change tracking
 
@@ -514,10 +588,9 @@ Goal: let users record what PID/filter/rate changes they made, then compare the 
 
 Future improvements:
 
-- Before / after tune records
+- Saved before / after tune records
 - Flight-feel prediction
 - Community log examples
-- Native `.bbl` support
 - Better support for newer Betaflight CSV formats
 - More flexible column detection
 - Real before/after log validation
