@@ -19,7 +19,7 @@ AeroTune is an early engineering project, not a finished commercial PID tuner.
 
 The goal is to test whether Betaflight Blackbox CSV logs can be translated into useful, feel-based tuning recommendations using known FPV PID tuning principles.
 
-AeroTune supports **Betaflight CSV exports** directly. V1.3 adds optional raw `.bbl`, `.bfl`, and `.txt` upload support by using a locally installed `blackbox_decode` converter. V1.4 adds before/after multi-log comparison so pilots can check whether a tune change improved or worsened the flight data.
+AeroTune supports **Betaflight CSV exports** directly. V1.3 adds raw `.bbl`, `.bfl`, and `.txt` upload support by using a locally installed `blackbox_decode` converter. When a raw Blackbox file is uploaded, AeroTune automatically converts it into a CSV first, then sends that converted CSV through the same parser/analyzer pipeline. V1.4 adds before/after multi-log comparison so pilots can check whether a tune change improved or worsened the flight data.
 
 Some newer Betaflight firmware versions may export CSV files with different column names or structure. AeroTune V1.1 / V1.2 focuses on making the parser stronger and showing clear parser diagnostics instead of failing silently.
 
@@ -237,7 +237,7 @@ This update helps users diagnose:
 
 ## V1.3 Raw Blackbox Log Converter
 
-AeroTune V1.3 adds optional raw Blackbox upload support.
+AeroTune V1.3 adds raw Blackbox upload support through a local converter.
 
 Supported upload types:
 
@@ -250,7 +250,18 @@ Supported upload types:
 
 CSV files are analyzed directly.
 
-Raw `.bbl`, `.bfl`, and `.txt` files are first converted into CSV using Betaflight's `blackbox_decode` tool, then passed through AeroTune's parser and analyzer.
+Raw `.bbl`, `.bfl`, and `.txt` files are **not analyzed directly as binary/raw logs**. When one of those files is uploaded, AeroTune uses Betaflight's `blackbox_decode` tool to create a CSV export first. AeroTune then analyzes the converted CSV with the same parser, diagnostics, optimizer, PID recommendation logic, and V1.4 comparison logic used for normal CSV uploads.
+
+In plain language:
+
+```text
+Upload .CSV  → AeroTune parses/analyzes it directly
+Upload .BBL  → AeroTune converts it to CSV → then analyzes the CSV
+Upload .BFL  → AeroTune converts it to CSV → then analyzes the CSV
+Upload .TXT  → AeroTune converts it to CSV → then analyzes the CSV
+```
+
+The user does not have to manually export CSV first when `blackbox_decode` is installed and detected.
 
 AeroTune does **not** bundle `blackbox_decode` inside this repository. The converter must be installed locally or pointed to with an environment variable:
 
@@ -258,7 +269,7 @@ AeroTune does **not** bundle `blackbox_decode` inside this repository. The conve
 export BLACKBOX_DECODE_PATH="$PWD/tools/blackbox-tools/obj/blackbox_decode"
 ```
 
-AeroTune searches for `blackbox_decode` in this order:
+AeroTune automatically searches for `blackbox_decode` in this order:
 
 ```text
 1. BLACKBOX_DECODE_PATH
@@ -382,9 +393,12 @@ Why: D helps damp dirty-air recovery, but motor heat must be checked.
 
 ---
 
-## CSV Optimizer
+## Converter / CSV Optimizer
 
-The built-in optimizer converts compatible logs into a standard AeroTune-ready format:
+The built-in converter/optimizer has two jobs:
+
+1. If the upload is raw `.bbl`, `.bfl`, or `.txt`, AeroTune uses `blackbox_decode` to convert it into CSV.
+2. Once the file is CSV, AeroTune cleans it into a standard AeroTune-ready format:
 
 ```text
 time, gyro_x, gyro_y, gyro_z,

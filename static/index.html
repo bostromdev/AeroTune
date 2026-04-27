@@ -440,8 +440,8 @@
         <div>
           <h1>AeroTune</h1>
           <div class="sub">
-            FPV Blackbox analyzer with V1.3 raw-log converter support:
-            detected columns, missing columns, sample rate, duration, usable rows, and clear failure reasons.
+            FPV Blackbox analyzer with automatic raw-log conversion:
+            upload CSV directly, or upload .BBL/.BFL/.TXT and AeroTune converts it to CSV before analysis.
           </div>
         </div>
       </div>
@@ -453,11 +453,11 @@
         <div class="card">
           <h2>Analyzer Controls</h2>
           <p class="small">
-            Upload a Betaflight CSV export, or a raw .BBL/.BFL/.TXT Blackbox log after blackbox_decode is installed.
+            Upload a Betaflight CSV export directly. You can also upload a raw .BBL, .BFL, or .TXT Blackbox log; AeroTune will use the local blackbox_decode converter to turn it into a CSV first, then analyze that converted CSV.
           </p>
 
           <form id="analyzeForm">
-            <label for="logFile">Blackbox CSV / Raw Log</label>
+            <label for="logFile">Betaflight CSV or Raw Blackbox Log</label>
             <input id="logFile" name="file" type="file" accept=".csv,.bbl,.bfl,.txt,text/csv" required />
 
             <label for="droneSize">Drone Size</label>
@@ -483,24 +483,24 @@
         </div>
 
         <div class="card">
-          <h2>CSV Optimizer</h2>
+          <h2>Converter / CSV Optimizer</h2>
           <p class="small">
-            Converts compatible CSV exports and raw Blackbox logs into AeroTune-ready columns, then returns converter and parser reports.
+            CSV files are cleaned into AeroTune-ready columns. Raw .BBL/.BFL/.TXT Blackbox logs are automatically converted into CSV first, then cleaned into the same AeroTune-ready format.
           </p>
 
           <form id="optimizeForm">
-            <label for="optimizerFile">CSV / Raw Log To Optimize</label>
+            <label for="optimizerFile">CSV or Raw Blackbox Log To Convert</label>
             <input id="optimizerFile" name="file" type="file" accept=".csv,.bbl,.bfl,.txt,text/csv" required />
-            <button id="optimizeBtn" type="submit">Download Optimized CSV</button>
+            <button id="optimizeBtn" type="submit">Convert / Download AeroTune CSV</button>
           </form>
 
-          <div id="optimizerStatus" class="message">No optimizer/converter job yet.</div>
+          <div id="optimizerStatus" class="message">No converter/optimizer job yet. Upload CSV to clean it, or upload .BBL/.BFL/.TXT to convert it into CSV.</div>
         </div>
 
         <div class="card">
           <h2>V1.4 Before / After Comparison</h2>
           <p class="small">
-            Upload a before-tune log and an after-tune log. Use the same drone size and tune goal selected above.
+            Upload a before-tune log and an after-tune log. Each file can be a Betaflight CSV export or a raw .BBL/.BFL/.TXT Blackbox log. Raw logs are converted to CSV automatically before comparison.
           </p>
 
           <form id="compareForm">
