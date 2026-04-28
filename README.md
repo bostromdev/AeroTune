@@ -82,7 +82,7 @@ Fly → log → analyze → make one small change → fly again → compare befo
 
 ## Notice
 
-AeroTune is an independent open-source FPV Blackbox analysis project created by **Christopher Bostrom / bostromdev**.
+AeroTune is an independent source-available FPV Blackbox analysis project created by **Christopher Bostrom / bostromdev**.
 
 This project is not affiliated with AeroTune7, aerobot2.com, or any similarly named paid tuning tool.
 
@@ -566,19 +566,19 @@ sources.md
 
 ## License
 
-AeroTune is released under the Apache License 2.0.
+AeroTune is **source-available, not open-source**.
 
-You are free to use, modify, fork, study, and build from this project.
+Copyright © 2026 Christopher Bostrom. All Rights Reserved.
 
-If you publish or redistribute work based on AeroTune, please keep the license notice and give credit where reasonable:
+You may view the source code, run an unmodified copy of AeroTune locally for personal non-commercial evaluation, and use it to analyze your own Betaflight Blackbox logs.
 
-```text
-Based on AeroTune by Christopher Bostrom
-```
+You may **not** copy, redistribute, modify, repackage, sell, host, commercialize, fork for public release, publish derivative works, or reuse AeroTune's analyzer logic, parser logic, comparison logic, UI structure, documentation, branding, or project materials without written permission from Christopher Bostrom.
 
-The goal is to encourage FPV pilots, developers, and researchers to use and improve the project while keeping clear attribution to the original creator.
+Permission is required before using AeroTune's logic or implementation in another project.
 
----
+For collaboration, licensing, or permission requests, contact **Christopher Bostrom / bostromdev**.
+
+See `LICENSE` and `NOTICE` for the full terms.
 
 ## Disclaimer
 

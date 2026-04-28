@@ -1,18 +1,19 @@
-Apache License
-Version 2.0, January 2004
-http://www.apache.org/licenses/
+AeroTune Source-Available License
 
-Copyright 2026 Christopher Bostrom
+Copyright © 2026 Christopher Bostrom. All Rights Reserved.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+This repository is source-available for personal review, testing, educational inspection, and portfolio demonstration only.
 
-    http://www.apache.org/licenses/LICENSE-2.0
+Permission is granted to view the source code and run an unmodified copy of AeroTune locally for personal, non-commercial evaluation only, including analyzing your own Betaflight Blackbox logs.
 
-## License
+No permission is granted to copy, redistribute, modify, repackage, sublicense, sell, commercialize, host as a service, publish derivative works, or reuse AeroTune's source code, analyzer logic, parser logic, comparison logic, UI structure, documentation, branding, or project materials in another project without prior written permission from Christopher Bostrom.
 
-AeroTune is released under the Apache License 2.0.
+You may not remove copyright notices, attribution notices, license notices, or project ownership notices.
 
-You are free to use, modify, fork, study, and build from this project.  
-If you publish or redistribute work based on AeroTune, please keep the license notice and give credit where reasonable:
+You may not represent AeroTune or derivative work as your own project.
+
+Contributions, collaborations, commercial licensing, educational use beyond personal testing, or reuse requests require written permission from Christopher Bostrom.
+
+Third-party components remain under their respective licenses. AeroTune does not bundle or redistribute Betaflight blackbox-tools or blackbox_decode.
+
+THE SOFTWARE IS PROVIDED FOR PERSONAL EVALUATION ONLY, WITHOUT WARRANTY OF ANY KIND. USE AT YOUR OWN RISK. FPV drone tuning can affect flight safety. Always test carefully, make small changes, and verify motor temperature and flight behavior.
