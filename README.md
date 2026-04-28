@@ -90,7 +90,7 @@ Fly -> log -> analyze -> make one small change -> fly again -> compare before/af
 
 AeroTune is an independent source-available FPV Blackbox analysis project created by **Christopher Bostrom / bostromdev**.
 
-This project is not affiliated with AeroTune7, aerobot2.com, or any similarly named paid tuning tool. AeroTune is being built as a free engineering project for FPV pilots, developers, and researchers. Collaborators and testers who provide useful CSV logs may be credited in the project as the validation dataset grows.
+This project is not affiliated with AeroTune7, aerobot2.com, or any similarly named paid tuning tool. AeroTune is being built as a free-to-run local evaluation project for FPV pilots, developers, and researchers. Collaborators and testers who provide useful CSV logs may be credited in the project as the validation dataset grows.
 
 ---
 
