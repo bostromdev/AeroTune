@@ -123,7 +123,7 @@
       font-weight: 700;
     }
 
-    input, select, button {
+    input, select, textarea, button {
       width: 100%;
       border-radius: 12px;
       border: 1px solid var(--line);
@@ -134,6 +134,8 @@
     }
 
     input[type="file"] { padding: 10px; }
+
+    textarea { min-height: 120px; resize: vertical; line-height: 1.45; }
 
     button {
       cursor: pointer;
@@ -253,6 +255,29 @@
 
 
 
+
+
+    .download-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .download-button {
+      display: block;
+      border: 1px solid rgba(99, 214, 255, 0.38);
+      border-radius: 12px;
+      padding: 12px;
+      background: #0d171d;
+      color: var(--accent);
+      text-align: center;
+      font-weight: 800;
+    }
+
+    .download-button:hover {
+      border-color: rgba(99, 214, 255, 0.75);
+    }
 
     .comparison-panel {
       display: grid;
@@ -533,6 +558,29 @@
         </div>
 
 
+
+        <div class="card">
+          <h2>V1.5 Tune-Change Tracking</h2>
+          <p class="small">
+            Upload the before log, upload the after log, then describe exactly what changed. AeroTune compares the logs and tells you whether the change helped, hurt, or needs another test.
+          </p>
+
+          <form id="trackForm">
+            <label for="trackBeforeLogFile">Before Tune Log</label>
+            <input id="trackBeforeLogFile" name="before_file" type="file" accept=".csv,.bbl,.bfl,.txt,text/csv" required />
+
+            <label for="trackAfterLogFile">After Tune Log</label>
+            <input id="trackAfterLogFile" name="after_file" type="file" accept=".csv,.bbl,.bfl,.txt,text/csv" required />
+
+            <label for="tuneChanges">What changed?</label>
+            <textarea id="tuneChanges" name="tune_changes" placeholder="Example: Raised roll D 2%, lowered pitch P 1%, left yaw unchanged, same props and battery type." required></textarea>
+
+            <button id="trackBtn" type="submit">Track Tune Change</button>
+          </form>
+
+          <div id="trackStatus" class="message">No tune-change report yet.</div>
+        </div>
+
         <div class="card">
           <h2>Converter Report</h2>
           <div id="converterStatus" class="message">Waiting for upload.</div>
@@ -579,6 +627,15 @@
           <pre id="comparisonMachineOutput">No comparison yet.</pre>
         </div>
 
+
+        <div class="card">
+          <h2>V1.5 Tune-Change Result</h2>
+          <div id="trackingResult" class="message">Upload before/after logs and describe the tune change to track whether it helped.</div>
+          <div id="trackingPanel" class="comparison-panel"></div>
+          <h3 style="margin-top:16px;">Tune-Change Machine Output</h3>
+          <pre id="trackingMachineOutput">No tune-change report yet.</pre>
+        </div>
+
         <div class="card">
           <h2>Pilot Tune Notes</h2>
           <div class="chips">
@@ -597,9 +654,11 @@
     const analyzeForm = document.getElementById("analyzeForm");
     const optimizeForm = document.getElementById("optimizeForm");
     const compareForm = document.getElementById("compareForm");
+    const trackForm = document.getElementById("trackForm");
     const analyzeBtn = document.getElementById("analyzeBtn");
     const optimizeBtn = document.getElementById("optimizeBtn");
     const compareBtn = document.getElementById("compareBtn");
+    const trackBtn = document.getElementById("trackBtn");
 
     const parserStatus = document.getElementById("parserStatus");
     const parserReport = document.getElementById("parserReport");
@@ -620,9 +679,13 @@
     const machineOutput = document.getElementById("machineOutput");
     const optimizerStatus = document.getElementById("optimizerStatus");
     const compareStatus = document.getElementById("compareStatus");
+    const trackStatus = document.getElementById("trackStatus");
     const comparisonResult = document.getElementById("comparisonResult");
     const comparisonPanel = document.getElementById("comparisonPanel");
     const comparisonMachineOutput = document.getElementById("comparisonMachineOutput");
+    const trackingResult = document.getElementById("trackingResult");
+    const trackingPanel = document.getElementById("trackingPanel");
+    const trackingMachineOutput = document.getElementById("trackingMachineOutput");
     const downloadAnalyzed = document.getElementById("downloadAnalyzed");
 
     let lastAnalysis = null;
@@ -1157,6 +1220,123 @@
       }
     });
 
+
+    function trackingScoreClass(score) {
+      const num = Number(score || 0);
+      if (num >= 8) return "good";
+      if (num <= -8) return "bad";
+      return "warn";
+    }
+
+    function renderTrackingReport(data) {
+      const report = data.tune_tracking || {};
+      trackingMachineOutput.textContent = JSON.stringify(data, null, 2);
+
+      if (!report || !Object.keys(report).length) {
+        setMessage(trackingResult, "No tune-change report returned.", "bad");
+        if (trackingPanel) trackingPanel.innerHTML = "";
+        return;
+      }
+
+      const score = Number(report.overall_score_pct || 0);
+      const scoreClass = trackingScoreClass(score);
+      const changedHelped = report.changed_helped === true ? "Yes" : report.changed_helped === false ? "No" : "Unclear";
+      const savedReport = data.report || {};
+      const metrics = report.metric_groups || {};
+      const baseline = report.baseline_status || {};
+      const changeNotes = report.change_notes || {};
+      const pidTerms = changeNotes.pid_terms || {};
+      const axisVerdicts = report.axis_verdicts || {};
+
+      setMessage(trackingResult, report.summary || "Tune-change tracking complete.", scoreClass);
+
+      const pidRows = ["p", "i", "d", "ff"].map(term => {
+        const item = pidTerms[term] || {};
+        const direction = item.direction || "not mentioned";
+        return `<li>${term.toUpperCase()}: ${item.mentioned ? direction : "not mentioned"}</li>`;
+      }).join("");
+
+      const axisRows = Object.entries(axisVerdicts).map(([axis, item]) => `
+        <li>${axis.toUpperCase()}: ${item.verdict || "unknown"} (${valueOrDash(item.score_pct, "%")}) — ${item.read || ""}</li>
+      `).join("");
+
+      const warnings = (report.warnings || []).map(item => `<li>${shortText(item)}</li>`).join("") || "<li>No special warnings returned.</li>";
+      const remaining = (baseline.remaining_after_issues || []).map(item => `<li>${shortText(item)}</li>`).join("") || "<li>No remaining baseline issues reported.</li>";
+
+      trackingPanel.innerHTML = `
+        <div class="comparison-headline">
+          <b>Decision</b>
+          <div class="verdict score ${scoreClass}">${shortText(report.decision || "review")}</div>
+          <div class="small" style="margin-top:8px;">Changed helped: ${changedHelped} · Score: ${score.toFixed(2)}% · Confidence: ${valueOrDash(report.confidence)}</div>
+        </div>
+
+
+        ${savedReport.report_id ? `
+        <div class="axis-compare-card">
+          <div class="axis-head">
+            <div class="axis-title">Saved Report</div>
+            <span class="chip good">V1.5.1</span>
+          </div>
+          <div class="small">Report ID: <code>${shortText(savedReport.report_id)}</code></div>
+          <div class="download-actions">
+            <a class="download-button" href="${savedReport.download_json_url || `/reports/tune-changes/${savedReport.report_id}.json`}" target="_blank" rel="noopener">Download JSON</a>
+            <a class="download-button" href="${savedReport.download_markdown_url || `/reports/tune-changes/${savedReport.report_id}.md`}" target="_blank" rel="noopener">Download Markdown</a>
+          </div>
+        </div>
+        ` : ""}
+
+        <div class="axis-compare-card">
+          <div class="axis-head">
+            <div class="axis-title">Metric Groups</div>
+            <span class="chip ${scoreClass}">${shortText(report.overall_verdict || "unknown")}</span>
+          </div>
+          <div class="compare-metrics">
+            <div class="compare-metric"><b>Noise</b>${valueOrDash(metrics.noise_improvement_pct, "%")}</div>
+            <div class="compare-metric"><b>Tracking</b>${valueOrDash(metrics.tracking_improvement_pct, "%")}</div>
+            <div class="compare-metric"><b>Propwash</b>${valueOrDash(metrics.propwash_improvement_pct, "%")}</div>
+            <div class="compare-metric"><b>Style allowed?</b>${baseline.style_tuning_allowed ? "Yes" : "No"}</div>
+          </div>
+        </div>
+
+        <div class="axis-compare-card">
+          <div class="axis-head">
+            <div class="axis-title">Recorded Tune Change</div>
+          </div>
+          <ul class="summary-list">${pidRows}</ul>
+          <div class="small" style="margin-top:8px;">${shortText(changeNotes.raw_notes || "No notes entered.")}</div>
+        </div>
+
+        <div class="axis-compare-card">
+          <div class="axis-head">
+            <div class="axis-title">Axis Verdicts</div>
+          </div>
+          <ul class="summary-list">${axisRows || "<li>No axis verdicts returned.</li>"}</ul>
+        </div>
+
+        <div class="axis-compare-card">
+          <div class="axis-head">
+            <div class="axis-title">Safe Baseline Status</div>
+          </div>
+          <div class="message ${baseline.style_tuning_allowed ? "good" : "warn"}">${shortText(baseline.style_guidance || "")}</div>
+          <ul class="summary-list">${remaining}</ul>
+        </div>
+
+        <div class="axis-compare-card">
+          <div class="axis-head">
+            <div class="axis-title">Warnings</div>
+          </div>
+          <ul class="summary-list">${warnings}</ul>
+        </div>
+
+        <div class="axis-compare-card">
+          <div class="axis-head">
+            <div class="axis-title">Next Step</div>
+          </div>
+          <div class="message">${shortText(report.next_step || "Retest with the same flight route.")}</div>
+        </div>
+      `;
+    }
+
     compareForm.addEventListener("submit", async (event) => {
       event.preventDefault();
 
@@ -1187,6 +1367,40 @@
         setMessage(comparisonResult, error.message || String(error), "bad");
       } finally {
         compareBtn.disabled = false;
+      }
+    });
+
+
+    trackForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const formData = new FormData(trackForm);
+      formData.set("drone_size", document.getElementById("droneSize").value);
+      formData.set("tuning_goal", document.getElementById("tuningGoal").value);
+
+      trackBtn.disabled = true;
+      setMessage(trackStatus, "Tracking tune change...", "warn");
+      setMessage(trackingResult, "Tune-change tracking running...", "warn");
+      if (trackingPanel) trackingPanel.innerHTML = "";
+
+      try {
+        const response = await fetch("/track-tune-change", { method: "POST", body: formData });
+        const data = await readJsonResponse(response);
+
+        if (!response.ok) {
+          setMessage(trackStatus, data.error || "Tune-change tracking failed.", "bad");
+          setMessage(trackingResult, data.error || "Tune-change tracking failed.", "bad");
+          if (trackingMachineOutput) trackingMachineOutput.textContent = JSON.stringify(data, null, 2);
+          return;
+        }
+
+        setMessage(trackStatus, data.report?.report_id ? `Tune-change tracking complete. Saved report ${data.report.report_id}.` : "Tune-change tracking complete.", "good");
+        renderTrackingReport(data);
+      } catch (error) {
+        setMessage(trackStatus, error.message || String(error), "bad");
+        setMessage(trackingResult, error.message || String(error), "bad");
+      } finally {
+        trackBtn.disabled = false;
       }
     });
 

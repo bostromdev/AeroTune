@@ -33,3 +33,8 @@ apply_aerotune_*.py
 aerotune_*_patch*.zip
 aerotune_*_fix*.zip
 AEROTUNE_*_README.md
+
+# Local tune-change reports. Keep generated flight-analysis reports out of Git.
+reports/tune_changes/*.json
+reports/tune_changes/*.md
+!reports/tune_changes/.gitkeep

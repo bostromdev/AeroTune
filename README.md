@@ -235,6 +235,8 @@ Advanced users can also use command-line Blackbox tools to decode supported logs
 - Conservative PID percentage-change recommendations
 - Safe workflow gate: clean baseline first, style tuning second
 - V1.4 before/after log comparison for tune validation
+- V1.5 tune-change tracking for validating specific tune changes
+- V1.5.1 saved tune-change reports with JSON/Markdown downloads
 
 ---
 
@@ -406,6 +408,87 @@ Same kind of throttle punches / turns / propwash recovery
 ```
 
 If the two flights are very different, AeroTune will still compare them, but the confidence may be lower.
+
+---
+
+
+## V1.5 Tune-Change Tracking
+
+AeroTune V1.5 adds tune-change tracking.
+
+The goal is to answer a more useful question than “what should I change?”:
+
+```text
+I changed something.
+Did the log actually improve?
+Should I keep it, reduce it, revert it, or retest?
+```
+
+Workflow:
+
+```text
+1. Fly a clean, repeatable before log.
+2. Make one clear PID/filter/rate change.
+3. Fly the same test route again.
+4. Upload the before log.
+5. Upload the after log.
+6. Write what changed.
+7. AeroTune compares the logs and tracks whether the change helped or hurt.
+```
+
+V1.5 checks:
+
+- overall before/after score
+- noise improvement
+- tracking improvement
+- propwash improvement
+- axis-specific verdicts
+- whether the after log is clean enough for style tuning
+- whether the change should be kept, reduced, reverted, or retested
+
+Important: V1.5 is **not automatic PID rewriting**. It does not change values for the pilot. It records the change, compares the evidence, and gives a conservative decision.
+
+AeroTune’s safe workflow remains:
+
+```text
+Baseline cleanup first.
+Style tuning second.
+One change at a time.
+Retest after every change.
+```
+
+
+
+## V1.5.1 Saved Tune-Change Reports
+
+AeroTune V1.5.1 saves every tune-change tracking result as both JSON and Markdown.
+
+When the V1.5 form is submitted, AeroTune now:
+
+- saves the full tune-change result as JSON
+- saves a short human-readable Markdown summary
+- creates a unique report ID
+- stores reports in `reports/tune_changes/`
+- returns report download links to the UI
+- adds download buttons for JSON and Markdown
+
+Saved report files include:
+
+- before filename
+- after filename
+- tune-change notes
+- overall verdict
+- improvement score
+- confidence
+- noise improvement
+- tracking improvement
+- propwash improvement
+- axis verdicts
+- safe-baseline / style-tuning status
+- next step
+
+Generated reports are local working files and are ignored by Git by default so personal flight data is not accidentally committed.
+
 
 ---
 
@@ -636,9 +719,19 @@ Implementation:
 
 ### V1.5 — Tune-change tracking
 
-Status: planned.
+Status: implemented.
 
 Goal: let users record what PID/filter/rate changes they made, then compare the resulting flight logs to see whether the change helped or hurt.
+
+Implementation:
+
+- `/track-tune-change` endpoint
+- before/after upload UI
+- tune-change notes field
+- keep/reduce/revert/retest decision
+- noise/tracking/propwash improvement grouping
+- safe-baseline gate before style tuning
+- saved JSON and Markdown report downloads
 
 Future improvements:
 
