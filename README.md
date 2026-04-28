@@ -41,6 +41,45 @@ The long-term goal is to compare recommendations against real flight results and
 
 ---
 
+## Safe Tuning Workflow: Clean Baseline First, Style Second
+
+AeroTune is intentionally engineering-focused, not a magic auto-tune button.
+
+The safest workflow is:
+
+```text
+1. Get a clean baseline log first.
+2. Use Efficient / Smooth while fixing problems.
+3. Remove noise, propwash, bounceback, weak hold, and poor tracking.
+4. Confirm the improvement with another similar log.
+5. Only after the log is clean, choose Locked-In or Cinematic to shape the feel.
+```
+
+This matters because a drone can look different from one flight to the next because of voltage sag, wind, battery weight, prop condition, motor temperature, dirty air, or mechanical vibration. AeroTune should not chase a style preference while the baseline tune is still unsafe or noisy.
+
+### Tune Goal Meanings
+
+**Efficient / Smooth** is the baseline cleanup mode. Start here. Use it to get the quad safe, clean, and predictable.
+
+**Locked-In / Responsive** is a style mode. Use it only after AeroTune detects a clean baseline. It may suggest tiny P/FF changes for sharper stick connection.
+
+**Floaty / Cinematic** is a style mode. Use it only after AeroTune detects a clean baseline. It may suggest tiny P/FF reductions for smoother camera movement.
+
+If a user selects Locked-In or Cinematic before the log is clean, AeroTune will hold the analysis in Efficient / Smooth cleanup mode. The app will explain that style tuning is blocked until the baseline log is clean.
+
+```text
+Dirty / noisy log → baseline cleanup only
+Clean log → style tuning allowed
+```
+
+The goal is not constant PID changes. The goal is controlled engineering validation:
+
+```text
+Fly → log → analyze → make one small change → fly again → compare before/after
+```
+
+---
+
 ## Notice
 
 AeroTune is an independent open-source FPV Blackbox analysis project created by **Christopher Bostrom / bostromdev**.
@@ -194,6 +233,7 @@ Advanced users can also use command-line Blackbox tools to decode supported logs
 - Drone size profiles for 3", 3.5", 4", 5", and 7" builds
 - Local-first analysis for privacy and large CSV support
 - Conservative PID percentage-change recommendations
+- Safe workflow gate: clean baseline first, style tuning second
 - V1.4 before/after log comparison for tune validation
 
 ---
@@ -584,7 +624,7 @@ Goal: allow raw Blackbox logs to be uploaded, converted to CSV through `blackbox
 
 Status: implemented.
 
-Goal: compare before-tune and after-tune logs to determine whether noise, tracking, propwash, bounceback, and control response improved.
+Goal: compare before-tune and after-tune logs to determine whether noise, tracking, propwash, bounceback, and control response improved. V1.4 also supports the safe workflow rule: prove the baseline got cleaner before moving into Locked-In or Cinematic style tuning.
 
 Implementation:
 

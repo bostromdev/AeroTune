@@ -411,6 +411,18 @@
       letter-spacing: 0.04em;
     }
 
+
+    .workflow-note {
+      border: 1px solid rgba(255, 202, 95, 0.38);
+      background: rgba(255, 202, 95, 0.08);
+      color: #ffe4a8;
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-top: 10px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
     .small {
       font-size: 12px;
       color: var(--muted);
@@ -471,10 +483,13 @@
 
             <label for="tuningGoal">Tune Goal</label>
             <select id="tuningGoal" name="tuning_goal">
-              <option value="efficient" selected>Efficient / Smooth</option>
-              <option value="locked">Locked-In / Responsive</option>
-              <option value="floaty">Floaty / Cinematic</option>
+              <option value="efficient" selected>Efficient / Smooth — baseline cleanup first</option>
+              <option value="locked">Locked-In / Responsive — only after clean baseline</option>
+              <option value="floaty">Floaty / Cinematic — only after clean baseline</option>
             </select>
+            <div class="workflow-note">
+              Safe workflow: get a clean Efficient/Smooth baseline log first. Once noise, propwash, bounceback, weak hold, and tracking problems are clean, switch to Locked-In or Cinematic to shape the feel. If the log is dirty, AeroTune will hold style modes back and use baseline cleanup logic.
+            </div>
 
             <button id="analyzeBtn" type="submit">Analyze Log</button>
           </form>
@@ -500,7 +515,7 @@
         <div class="card">
           <h2>V1.4 Before / After Comparison</h2>
           <p class="small">
-            Upload a before-tune log and an after-tune log. Each file can be a Betaflight CSV export or a raw .BBL/.BFL/.TXT Blackbox log. Raw logs are converted to CSV automatically before comparison.
+            Upload a before-tune log and an after-tune log. Each file can be a Betaflight CSV export or a raw .BBL/.BFL/.TXT Blackbox log. Raw logs are converted to CSV automatically before comparison. Use V1.4 to prove the baseline got cleaner before switching to a style tune.
           </p>
 
           <form id="compareForm">
@@ -833,6 +848,7 @@
 
       const analysis = data.analysis || {};
       const report = data.parser_report || {};
+      const gate = analysis.style_gate || {};
       const axes = axisList(analysis);
       const ranked = worstAxes(axes);
       const problemAxes = ranked.filter(axis => axis.issue && axis.issue !== "clean");
@@ -845,6 +861,16 @@
       const pidMoves = ranked.map(usefulPidMove).slice(0, 3);
       const cautionItems = [];
       const nextItems = [];
+
+      if (gate.style_goal_blocked) {
+        cautionItems.push(gate.message || "Style tuning is blocked until the baseline log is clean.");
+      } else if (gate.style_goal_allowed) {
+        cautionItems.push("Clean baseline confirmed. Style tuning is active; keep changes tiny and retest.");
+      } else if (gate.clean_baseline) {
+        cautionItems.push("Clean baseline confirmed. You can stay Efficient/Smooth or switch to Locked-In/Cinematic for feel shaping.");
+      } else {
+        cautionItems.push("Baseline cleanup comes first. Do not chase Locked-In/Cinematic feel until the log is clean.");
+      }
 
       if (problemAxes.some(axis => ["high_frequency_noise", "mid_frequency_vibration", "mechanical_noise_suspected"].includes(axis.issue))) {
         cautionItems.push("Check props, motor screws, motor bells, frame cracks, and stack mounting before chasing PID.");
@@ -866,6 +892,9 @@
         cautionItems.push("No major caution flags. Still change one thing at a time and retest.");
       }
 
+      if (gate.next_step) {
+        nextItems.push(gate.next_step);
+      }
       nextItems.push("Apply only the biggest useful PID move first, not every small delta at once.");
       nextItems.push("Fly the same 60–90 second Blackbox test route again.");
       nextItems.push("Save the next CSV as an after-tune log for V1.4 comparison.");
@@ -879,6 +908,7 @@
       });
 
       usefulSummary.innerHTML = [
+        box("Safe tuning stage", `<div class="big-read">${shortText(gate.workflow_stage || analysis.workflow_stage || "baseline_cleanup")}</div><div class="small" style="margin-top:8px;">${shortText(gate.message || "Clean baseline first; style tuning second.")}</div><div class="small" style="margin-top:8px;">Requested: ${shortText(analysis.requested_tuning_goal_label || analysis.requested_tuning_goal || "—")} → Active: ${shortText(analysis.effective_tuning_goal_label || analysis.effective_tuning_goal || "—")}</div>`, "full"),
         box("Main tune read", `<div class="big-read">${mainRead}</div><div class="small" style="margin-top:8px;">${shortText(analysis.summary || "")}</div>`, "full"),
         box("Best first PID move", `<ul class="summary-list">${pidMoves.map(item => `<li>${item}</li>`).join("")}</ul>`),
         box("Data quality", `<ul class="summary-list">
@@ -956,6 +986,7 @@
         <div class="verdict score ${scoreClass(comparison.overall_score_pct)}">${formatScore(comparison.overall_score_pct)} ${shortText(comparison.overall_verdict || "")}</div>
         <div class="small" style="margin-top:8px;">Confidence: ${valueOrDash(comparison.confidence)}</div>
         <div class="small" style="margin-top:8px;">Next: ${shortText(comparison.next_step || "")}</div>
+        ${comparison.baseline_workflow ? `<div class="small" style="margin-top:8px;">Baseline workflow: ${shortText(comparison.baseline_workflow.message || "")}</div>` : ""}
       `;
       comparisonPanel.appendChild(headline);
 

@@ -435,6 +435,40 @@ def build_multilog_comparison(
     best_axis = max(axis_results.values(), key=lambda item: item["score_pct"])
     worst_axis = min(axis_results.values(), key=lambda item: item["score_pct"])
 
+    before_clean = bool((before_analysis or {}).get("clean_baseline", False))
+    after_clean = bool((after_analysis or {}).get("clean_baseline", False))
+    after_gate = (after_analysis or {}).get("style_gate", {}) if isinstance(after_analysis, dict) else {}
+    requested_goal = str((after_analysis or {}).get("requested_tuning_goal", tuning_goal))
+    effective_goal = str((after_analysis or {}).get("effective_tuning_goal", tuning_goal))
+
+    if after_clean:
+        baseline_message = (
+            "After log is clean enough to move from baseline cleanup into style tuning. "
+            "Locked-In or Cinematic changes should still be small and verified with another similar log."
+        )
+    else:
+        baseline_message = (
+            "After log is not clean enough for style tuning yet. Keep working in Efficient/Smooth baseline cleanup mode."
+        )
+        warnings.append("Do not switch to Locked-In/Cinematic style tuning until the after log is clean.")
+
+    next_step = _next_step(overall_verdict, worst_axis)
+    if after_clean:
+        next_step += " Clean baseline confirmed; you may now choose Locked-In or Cinematic if you want a different feel."
+    else:
+        next_step += " Baseline is still not clean, so do not chase Locked-In/Cinematic feel yet."
+
+    baseline_workflow = {
+        "before_clean_baseline": before_clean,
+        "after_clean_baseline": after_clean,
+        "ready_for_style_tuning": after_clean,
+        "requested_tuning_goal": requested_goal,
+        "effective_tuning_goal": effective_goal,
+        "after_style_gate": after_gate,
+        "message": baseline_message,
+        "rule": "Clean baseline first; style tuning second.",
+    }
+
     return {
         "version": "V1.4",
         "type": "before_after_log_comparison",
@@ -448,7 +482,9 @@ def build_multilog_comparison(
         "worst_axis": worst_axis["axis"],
         "axes": axis_results,
         "warnings": sorted(set(warnings)),
-        "next_step": _next_step(overall_verdict, worst_axis),
+        "next_step": next_step,
+        "baseline_workflow": baseline_workflow,
+        "ready_for_style_tuning": after_clean,
         "interpretation": {
             "positive_score": "After log improved versus before log.",
             "negative_score": "After log worsened versus before log.",

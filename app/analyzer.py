@@ -815,8 +815,82 @@ def _common_flags(issue: str, stats: AxisStats) -> List[str]:
     return flags
 
 
+
+STYLE_TUNING_GOALS = {"locked_in", "floaty"}
+
+
+def _goal_label(goal: str) -> str:
+    if goal == "locked_in":
+        return "Locked-In / Responsive"
+    if goal == "floaty":
+        return "Floaty / Cinematic"
+    return "Efficient / Smooth"
+
+
+def _style_gate(axes: Dict[str, Dict[str, Any]], requested_goal: str) -> Dict[str, Any]:
+    problem_axes = [
+        {"axis": axis, "issue": payload.get("issue"), "issue_label": payload.get("issue_label")}
+        for axis, payload in axes.items()
+        if payload.get("issue") != "clean"
+    ]
+    clean_baseline = bool(axes) and len(problem_axes) == 0
+    style_requested = requested_goal in STYLE_TUNING_GOALS
+    style_goal_allowed = clean_baseline and style_requested
+    style_goal_blocked = style_requested and not clean_baseline
+    effective_goal = requested_goal if (style_goal_allowed or requested_goal == "efficient") else "efficient"
+
+    if style_goal_allowed:
+        stage = "style_tuning"
+        message = f"Clean baseline detected. {_goal_label(requested_goal)} style tuning is allowed."
+        next_step = f"Shape feel with {_goal_label(requested_goal)} changes, then verify with another similar 60–90 second log."
+    elif style_goal_blocked:
+        stage = "baseline_cleanup"
+        message = f"{_goal_label(requested_goal)} was requested, but AeroTune is using Efficient/Smooth cleanup logic until the log is clean."
+        next_step = "Fix the listed baseline problems first. Once roll, pitch, and yaw are clean, switch back to Locked-In or Cinematic for feel shaping."
+    elif clean_baseline:
+        stage = "baseline_verified"
+        message = "Clean baseline detected. You can leave it Efficient/Smooth or choose Locked-In/Cinematic to shape feel."
+        next_step = "Leave it alone for Efficient/Smooth, or analyze again with Locked-In/Cinematic if you want a sharper or smoother feel."
+    else:
+        stage = "baseline_cleanup"
+        message = "Baseline cleanup mode. Fix noise, propwash, bounceback, weak hold, or tracking problems before style tuning."
+        next_step = "Apply only the safest first correction, retest, and do not chase Locked-In/Cinematic feel yet."
+
+    return {
+        "workflow_stage": stage,
+        "clean_baseline": clean_baseline,
+        "style_requested": style_requested,
+        "style_goal_allowed": style_goal_allowed,
+        "style_goal_blocked": style_goal_blocked,
+        "requested_goal": requested_goal,
+        "requested_goal_label": _goal_label(requested_goal),
+        "effective_goal": effective_goal,
+        "effective_goal_label": _goal_label(effective_goal),
+        "problem_axes": problem_axes,
+        "message": message,
+        "next_step": next_step,
+        "rule": "Clean baseline first; style tuning second.",
+    }
+
+
+def _workflow_summary(axes: Dict[str, Dict[str, Any]], gate: Dict[str, Any]) -> str:
+    problems = [f"{axis.upper()}: {payload['issue_label']}" for axis, payload in axes.items() if payload.get("issue") != "clean"]
+    if problems:
+        prefix = "Baseline cleanup required. "
+        if gate.get("style_goal_blocked"):
+            prefix += "Style tuning is blocked until the log is clean. "
+        return prefix + " | ".join(problems)
+
+    effective_goal = str(gate.get("effective_goal", "efficient"))
+    if effective_goal == "locked_in":
+        return "Clean baseline detected. Optional small P/FF increase may be used for a more locked-in feel."
+    if effective_goal == "floaty":
+        return "Clean baseline detected. Optional small P/FF decrease may be used for smoother cinematic feel."
+    return "Clean baseline detected. No PID change needed for Efficient/Smooth."
+
 def detect_oscillation(df: pd.DataFrame, drone_size: str = "7", tuning_goal: str = "efficient") -> Dict[str, Any]:
     goal = normalize_goal(tuning_goal)
+    requested_goal = goal
 
     if df is None or df.empty or "time" not in df.columns:
         return {
@@ -828,6 +902,27 @@ def detect_oscillation(df: pd.DataFrame, drone_size: str = "7", tuning_goal: str
             "axes": {},
             "recommendations": [],
             "tuning_goal": goal,
+            "requested_tuning_goal": requested_goal,
+            "effective_tuning_goal": "efficient",
+            "clean_baseline": False,
+            "style_goal_allowed": False,
+            "style_goal_blocked": requested_goal in STYLE_TUNING_GOALS,
+            "workflow_stage": "invalid",
+            "style_gate": {
+                "workflow_stage": "invalid",
+                "clean_baseline": False,
+                "style_requested": requested_goal in STYLE_TUNING_GOALS,
+                "style_goal_allowed": False,
+                "style_goal_blocked": requested_goal in STYLE_TUNING_GOALS,
+                "requested_goal": requested_goal,
+                "requested_goal_label": _goal_label(requested_goal),
+                "effective_goal": "efficient",
+                "effective_goal_label": _goal_label("efficient"),
+                "problem_axes": [],
+                "message": "No usable log data. Get a valid log before baseline or style tuning.",
+                "next_step": "Upload a valid Betaflight CSV or raw Blackbox log that can be converted to CSV.",
+                "rule": "Clean baseline first; style tuning second.",
+            },
             "source_references": SOURCE_REFERENCES,
             "common_problem_library": COMMON_PROBLEM_LIBRARY,
         }
@@ -927,10 +1022,72 @@ def detect_oscillation(df: pd.DataFrame, drone_size: str = "7", tuning_goal: str
             "tuning_moves": payload["tuning_moves"],
         })
 
+    style_gate = _style_gate(axes, requested_goal)
+    effective_goal = str(style_gate["effective_goal"])
+
+    if style_gate["style_goal_blocked"]:
+        global_warnings.append(
+            f"{style_gate['requested_goal_label']} was requested, but AeroTune used Efficient/Smooth cleanup logic because the log is not clean yet."
+        )
+        global_actions.insert(
+            0,
+            "Do not chase Locked-In/Cinematic feel yet. First get a clean baseline log, then switch to the feel style you want.",
+        )
+
+        for axis_name, payload in axes.items():
+            issue = str(payload.get("issue", "clean"))
+            new_delta = _base_delta(axis_name, issue)
+            new_delta = _apply_goal(axis_name, issue, new_delta, effective_goal)
+            new_delta = _apply_size_pid_limits(axis_name, issue, new_delta, drone_profile)
+            payload["pid_delta_pct"] = {k: round(v, 4) for k, v in new_delta.items()}
+            payload["requested_tuning_goal"] = requested_goal
+            payload["effective_tuning_goal"] = effective_goal
+            payload["style_goal_allowed"] = False
+            payload["style_goal_blocked"] = True
+            payload["clean_baseline"] = False
+            payload["workflow_stage"] = style_gate["workflow_stage"]
+            if issue == "clean":
+                payload["recommendation_text"] = (
+                    f"{axis_name.upper()}: clean on this axis, but the full log is not clean yet. No style PID change yet."
+                )
+            else:
+                payload["recommendation_text"] = _recommendation(axis_name, issue, effective_goal) + " Style request held until the full log is clean."
+            payload["tuning_moves"] = [
+                "Style mode is blocked for this analysis. Clean the baseline first.",
+                *_moves(issue, axis_name, effective_goal),
+            ]
+    else:
+        if style_gate["style_goal_allowed"]:
+            global_warnings.append("Style tuning is active because the baseline log is clean. Keep changes tiny and retest.")
+            global_actions.insert(0, f"Clean baseline confirmed. {style_gate['requested_goal_label']} style tuning is active.")
+        else:
+            global_warnings.append("Safe workflow: get a clean Efficient/Smooth baseline before chasing Locked-In or Cinematic feel.")
+
+        for payload in axes.values():
+            payload["requested_tuning_goal"] = requested_goal
+            payload["effective_tuning_goal"] = effective_goal
+            payload["style_goal_allowed"] = bool(style_gate["style_goal_allowed"])
+            payload["style_goal_blocked"] = False
+            payload["clean_baseline"] = bool(style_gate["clean_baseline"])
+            payload["workflow_stage"] = style_gate["workflow_stage"]
+
+    for rec in recommendations:
+        axis_payload = axes.get(rec.get("axis"), {})
+        rec["requested_tuning_goal"] = requested_goal
+        rec["effective_tuning_goal"] = effective_goal
+        rec["style_goal_allowed"] = axis_payload.get("style_goal_allowed", bool(style_gate["style_goal_allowed"]))
+        rec["style_goal_blocked"] = axis_payload.get("style_goal_blocked", bool(style_gate["style_goal_blocked"]))
+        rec["clean_baseline"] = axis_payload.get("clean_baseline", bool(style_gate["clean_baseline"]))
+        rec["workflow_stage"] = style_gate["workflow_stage"]
+        if rec.get("axis") in axes:
+            rec["pid_delta_pct"] = axes[rec["axis"]].get("pid_delta_pct", rec.get("pid_delta_pct", {}))
+            rec["recommendation_text"] = axes[rec["axis"]].get("recommendation_text", rec.get("recommendation_text", ""))
+            rec["tuning_moves"] = axes[rec["axis"]].get("tuning_moves", rec.get("tuning_moves", []))
+
     return {
         "status": "ok" if axes else "invalid",
         "valid_for_pid": valid_axis_count > 0,
-        "summary": _summary_from_axes(axes, goal) if axes else "No usable gyro axes found.",
+        "summary": _workflow_summary(axes, style_gate) if axes else "No usable gyro axes found.",
         "warnings": global_warnings,
         "global_actions": global_actions,
         "axes": axes,
@@ -947,7 +1104,16 @@ def detect_oscillation(df: pd.DataFrame, drone_size: str = "7", tuning_goal: str
             "clean_goal_scale": drone_profile["clean_goal_scale"],
             "pid_caps": drone_profile["pid_caps"],
         },
-        "tuning_goal": goal,
+        "tuning_goal": effective_goal,
+        "requested_tuning_goal": requested_goal,
+        "effective_tuning_goal": effective_goal,
+        "requested_tuning_goal_label": _goal_label(requested_goal),
+        "effective_tuning_goal_label": _goal_label(effective_goal),
+        "clean_baseline": bool(style_gate["clean_baseline"]),
+        "style_goal_allowed": bool(style_gate["style_goal_allowed"]),
+        "style_goal_blocked": bool(style_gate["style_goal_blocked"]),
+        "workflow_stage": style_gate["workflow_stage"],
+        "style_gate": style_gate,
         "common_problem_library": COMMON_PROBLEM_LIBRARY,
         "source_references": SOURCE_REFERENCES,
     }
