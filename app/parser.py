@@ -1,3 +1,6 @@
+# Copyright © 2026 Christopher Bostrom. All Rights Reserved.
+# Source-available for personal evaluation only. See LICENSE and NOTICE.
+
 from __future__ import annotations
 
 import csv

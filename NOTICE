@@ -1,12 +1,11 @@
 AeroTune
-Copyright 2026 Christopher Bostrom
 
-This project was created by Christopher Bostrom.
+Copyright © 2026 Christopher Bostrom. All Rights Reserved.
 
-You are welcome to use, study, modify, fork, and build from this project under the Apache License 2.0.
+AeroTune is an independent FPV Blackbox analysis and PID tuning assistant created by Christopher Bostrom / bostromdev.
 
-If you publish, redistribute, or release work based on this project, please retain this notice and give visible credit where reasonable, such as:
+AeroTune is source-available for personal testing and review only. Reuse, redistribution, modification, commercial use, hosted copies, derivative works, or use of AeroTune logic in another project requires written permission.
 
-    AeroTune analyzer by Christopher Bostrom
+AeroTune is not affiliated with Betaflight, AeroTune7, AeroBot2, or any similarly named paid tuning tool.
 
-This notice is intended to preserve attribution while encouraging open use and community improvement.
+Raw Blackbox conversion uses the external Betaflight blackbox-tools project when installed locally. AeroTune does not bundle or redistribute blackbox_decode.
