@@ -1,6 +1,45 @@
 # AeroTune Release Notes
 
-## AeroTune v1.5.1 — Saved Tune-Change Reports + Updated Guides
+## AeroTune v1.6.1 - CSV-First Docs + Raw Multi-Flight Planning
+
+### Documentation Updates
+
+- Clarified that AeroTune is CSV-first for beginner reliability.
+- Clarified that raw `.BBL`, `.BFL`, and `.TXT` support works locally only when `blackbox_decode` is installed and available.
+- Added the key CSV workflow reason: Blackbox Explorer lets the pilot select the correct/latest flight before exporting CSV.
+- Added warning that raw `.BBL` files may contain multiple flights.
+- Added planned raw multi-flight selector behavior:
+
+```text
+Flight 1/7
+Flight 2/7
+...
+Flight 7/7 = newest/default
+```
+
+### Current Recommendation
+
+Use CSV export from Betaflight Blackbox Explorer when accuracy matters, especially when a raw `.BBL` contains multiple flights. Select the correct flight first, then export CSV.
+
+### Future Feature Direction
+
+AeroTune can later add backend support to decode all flights from a raw `.BBL`, generate a tuning-advisor profile for each flight, and default the UI to the highest-numbered/latest flight.
+
+---
+
+## AeroTune v1.6 - PID Tuning Advisor + Creator Card
+
+### Major Updates
+
+- Added PID Tuning Advice card.
+- Added Betaflight PID value calculator.
+- Added creator / BostromDev YouTube card.
+- Cleaned public UI while keeping tune tracking available.
+- Improved local setup docs for Windows users.
+
+---
+
+## AeroTune v1.5.1 - Saved Tune-Change Reports + Updated Guides
 
 ### Major Updates
 
@@ -9,126 +48,27 @@
 - Added documentation for the V1.5 tune-change tracking workflow.
 - Updated the install/run guide for local-first use, raw-log conversion, saved reports, and privacy notes.
 - Updated the PID tuning guide around clean baseline first, style tuning second, one change at a time, and keep/reduce/revert/retest decisions.
-- Added a final converter/CSV explanation page to the install guide.
-- Updated README project structure so it matches the current app layout.
-
-### Safety Notes
-
-AeroTune still gives conservative tuning recommendations, not guaranteed final PID values. Pilots should make small changes, test one change at a time, check motor temperature after D-term changes, and fix mechanical vibration before tuning around it.
 
 ---
 
-## AeroTune v1.5 — Tune-Change Tracking
+## AeroTune v1.5 - Tune-Change Tracking
 
-### Major Updates
-
-- Added V1.5 tune-change tracking.
-- Added workflow for uploading before and after logs.
-- Added tune-change notes so the pilot can record exactly what was changed.
-- Added keep / reduce / revert / retest style decision logic.
-- Added grouping around noise improvement, tracking improvement, and propwash improvement.
-- Added safe-baseline gate before style tuning.
-
-### Goal
-
-V1.5 is meant to answer:
-
-```text
-I changed something.
-Did the log actually improve?
-Should I keep it, reduce it, revert it, or retest?
-```
+AeroTune can compare before/after logs, record what changed, and help decide whether to keep, reduce, revert, or retest a tuning change.
 
 ---
 
-## AeroTune v1.4 — Multi-Log Comparison
+## AeroTune v1.4 - Multi-Log Comparison
 
-### Major Updates
-
-- Added before/after log comparison.
-- Added comparison metrics for tracking error, high-frequency noise, propwash-band energy, and lag.
-- Added overall improvement score.
-- Added comparison confidence.
-- Added strongest improvement axis and weakest axis output.
-- Added next-step recommendation.
-
-### Best Practice
-
-Comparison works best when both logs come from similar flights:
-
-```text
-Same drone
-Same props
-Same battery type
-Same tune goal
-Same approximate flight length
-Same route or maneuver pattern
-```
+Added before/after comparison metrics for tracking, noise, propwash behavior, and lag.
 
 ---
 
-## AeroTune v1.3 — Raw Blackbox Converter
+## AeroTune v1.3 - Raw Blackbox Converter Path
 
-### Major Updates
-
-- Added raw `.bbl`, `.bfl`, and `.txt` upload support through local `blackbox_decode` conversion.
-- Added converter report output.
-- Kept CSV as the actual analysis format after conversion.
-- Kept `blackbox_decode` external instead of bundling it into AeroTune.
-
-### Supported Upload Types
-
-```text
-.csv
-.bbl
-.bfl
-.txt
-```
-
-CSV files are analyzed directly. Raw Blackbox logs are converted to CSV first, then analyzed.
+Added optional local raw-log conversion through `blackbox_decode`.
 
 ---
 
-## AeroTune v1.1 / v1.2 — Parser Diagnostic Update
+## AeroTune v1.0 - Initial Public Release
 
-### Major Updates
-
-- Parser returns `parser_report` instead of failing silently.
-- UI shows detected time column.
-- UI shows detected gyro columns.
-- UI shows detected setpoint columns.
-- UI shows detected throttle column.
-- UI shows missing required and optional columns.
-- UI shows sample rate, duration, usable rows, and cleanup information.
-- Optimizer returns parser diagnostics.
-- Optimizer downloads standardized CSV after returning JSON report.
-
----
-
-## AeroTune v1.02 — Size Profiles + Betaflight PID Value Calculator
-
-### Major Updates
-
-- Added drone size profiles for 3", 3.5", 4", 5", and 7" builds.
-- Added backend size handling so the selected drone size affects analyzer behavior.
-- Added conservative PID percentage-change recommendations.
-
----
-
-## AeroTune v1.0 — Initial Public Release
-
-### Major Features
-
-- Smart PID analysis engine.
-- Converts Blackbox CSV logs into tuning advice.
-- Uses gyro vs. setpoint tracking and residual error analysis.
-- Detects clean tune, propwash, bounceback, high-frequency noise, low-frequency wobble, mid-frequency vibration, high-throttle oscillation, weak hold, poor tracking, and slow stick response.
-- Built-in CSV optimizer.
-- Clean dark telemetry-style interface.
-- Tuning modes for Efficient, Locked-In, and Floaty goals.
-
-### Safety
-
-- Conservative PID changes.
-- Yaw D normally kept at 0.
-- Avoids unsafe D increases during noisy-log conditions.
+Initial Blackbox CSV analysis, conservative tuning recommendations, size profiles, and dark telemetry-style UI.

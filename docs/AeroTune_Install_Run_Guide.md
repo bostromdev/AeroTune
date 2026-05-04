@@ -1,25 +1,41 @@
 # AeroTune Install & Run Guide
 
-**Updated for AeroTune V1.5.1**
+**Updated for AeroTune V1.6.1**
 
-AeroTune is a local-first FPV Blackbox analysis tool for Betaflight tuning support. It reads flight-log data, runs parser diagnostics, analyzes roll/pitch/yaw behavior, compares before/after logs, and returns conservative tuning guidance instead of pretending to calculate perfect final PID values.
+AeroTune is a local-first FPV Blackbox analysis tool for Betaflight tuning support. It reads flight-log data, analyzes roll/pitch/yaw behavior, and returns conservative tuning guidance instead of pretending to calculate perfect final PID values.
 
-## 1. What AeroTune Supports
+## 1. Recommended Workflow: CSV First
 
-AeroTune supports these upload types:
+The recommended workflow is:
 
 ```text
-.csv  - Betaflight Blackbox CSV export, analyzed directly
-.bbl  - raw Blackbox log, converted locally with blackbox_decode first
-.bfl  - raw Blackbox log, converted locally with blackbox_decode first
-.txt  - raw Blackbox text log, converted locally with blackbox_decode first
+Betaflight raw Blackbox log
+        -> open in Betaflight Blackbox Explorer
+        -> choose the correct flight
+        -> export that flight as CSV
+        -> upload CSV into AeroTune
 ```
 
-CSV files work without extra tools. Raw `.bbl`, `.bfl`, and `.txt` uploads require Betaflight's `blackbox_decode` tool to be installed locally or pointed to with `BLACKBOX_DECODE_PATH`.
+This is recommended because raw `.BBL` files can contain multiple flights. Blackbox Explorer lets you select the flight you actually want to analyze before exporting. If the log contains seven flights, the newest one is typically shown as `7/7`. If the log contains three flights, the newest one is typically `3/3`.
 
-AeroTune does not bundle or redistribute `blackbox_decode`; it only calls a local copy when the user chooses to analyze raw Blackbox files.
+Selecting the correct/latest flight before CSV export prevents AeroTune from analyzing the wrong internal flight.
 
-## 2. Local Requirements
+## 2. Supported Upload Types
+
+AeroTune supports:
+
+```text
+.csv  - recommended, analyzed directly
+.bbl  - raw Blackbox log, converted locally if blackbox_decode is installed
+.bfl  - raw Blackbox log, converted locally if blackbox_decode is installed
+.txt  - raw Blackbox text log, converted locally if blackbox_decode is installed
+```
+
+CSV files work without extra tools. Raw files require `blackbox_decode` to be installed locally or pointed to with `BLACKBOX_DECODE_PATH`.
+
+AeroTune does not bundle or redistribute `blackbox_decode`. It calls your local copy when raw conversion is needed.
+
+## 3. Local Requirements
 
 Required:
 
@@ -30,10 +46,10 @@ Required:
 
 Optional for raw log upload:
 
-- `blackbox_decode` from Betaflight blackbox-tools
-- `make` and a compiler toolchain if building blackbox-tools locally
+- Betaflight `blackbox_decode`
+- `make` and compiler tools if building blackbox-tools locally
 
-## 3. Clone and Install
+## 4. macOS / Linux Setup
 
 ```bash
 git clone https://github.com/bostromdev/AeroTune.git
@@ -42,44 +58,72 @@ python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
 python3 -m pip install -r requirements.txt
-python3 -m pip install python-multipart
+python3 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-## 4. Run AeroTune Locally
-
-```bash
-source .venv/bin/activate
-python3 -m uvicorn main:app --reload
-```
-
-Open this in a browser:
+Open:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-AeroTune is designed for local use because FPV Blackbox logs can be large. Local use avoids hosted upload limits, request timeouts, slow processing, failed large-file uploads, and accidental upload of private flight data to a server.
+## 5. Windows PowerShell Setup
 
-## 5. Optional Raw Blackbox Converter Setup
-
-CSV export is the beginner-safe workflow. Use this section only when you want AeroTune to accept `.bbl`, `.bfl`, or `.txt` raw logs directly.
-
-```bash
-mkdir -p tools
-
-if [ ! -d tools/blackbox-tools/.git ]; then
-  git clone https://github.com/betaflight/blackbox-tools.git tools/blackbox-tools
-else
-  git -C tools/blackbox-tools pull --ff-only
-fi
-
-make -C tools/blackbox-tools obj/blackbox_decode
-
-export BLACKBOX_DECODE_PATH="$PWD/tools/blackbox-tools/obj/blackbox_decode"
-"$BLACKBOX_DECODE_PATH" --help
+```powershell
+git clone https://github.com/bostromdev/AeroTune.git
+cd AeroTune
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+py -3 -m pip install --upgrade pip
+py -3 -m pip install -r requirements.txt
+py -3 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-AeroTune searches for the converter in this order:
+Open:
+
+```text
+http://127.0.0.1:8000
+```
+
+If PowerShell blocks the activation script, run:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+Then activate again:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+## 6. Windows Command Prompt Setup
+
+```bat
+git clone https://github.com/bostromdev/AeroTune.git
+cd AeroTune
+py -3 -m venv .venv
+.venv\Scripts\activate.bat
+py -3 -m pip install --upgrade pip
+py -3 -m pip install -r requirements.txt
+py -3 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+## 7. Windows Troubleshooting: Uvicorn Installed But Not Found
+
+If Windows says `uvicorn` is not recognized, but pip says `Requirement already satisfied`, use:
+
+```powershell
+py -3 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+This runs uvicorn through Python and avoids PATH issues.
+
+## 8. Optional Raw Blackbox Converter Setup
+
+Use this only if you want AeroTune to accept raw `.BBL`, `.BFL`, or `.TXT` logs directly.
+
+AeroTune searches for `blackbox_decode` in this order:
 
 ```text
 1. BLACKBOX_DECODE_PATH
@@ -87,34 +131,40 @@ AeroTune searches for the converter in this order:
 3. system PATH
 ```
 
-If raw upload fails, export CSV from Betaflight Blackbox Explorer and upload the CSV instead.
+If raw upload fails, export CSV from Betaflight Blackbox Explorer and upload that CSV instead.
 
-## 6. Recommended Blackbox Test Flight
+## 9. Planned Raw Multi-Flight Selector
 
-For useful analysis, do not upload a random hover-only log. Use a repeatable 60-90 second test flight.
+A future AeroTune feature can decode multiple flights from one raw `.BBL` file and show a selector like:
 
-Recommended test pattern:
+```text
+Flight 1/7
+Flight 2/7
+Flight 3/7
+...
+Flight 7/7  <- newest/default
+```
+
+The tuning advisor would build one profile per decoded flight. The UI should default to the highest-numbered flight because that is normally the most recent flight in the log.
+
+Until that is implemented, use Blackbox Explorer to select the exact flight and export CSV.
+
+## 10. Recommended Blackbox Test Flight
+
+Use a repeatable 60-90 second test flight:
 
 - Smooth cruise
 - Small roll, pitch, and yaw inputs
-- A few controlled throttle punches
+- Controlled throttle punches
 - Medium turns
 - Quick stops and direction changes
 - One or two safe dirty-air / propwash recovery moments
 
-Keep comparison flights as similar as possible:
+Avoid logs dominated by crashes, heavy wind, damaged props, battery sag, or random hovering.
 
-- Same drone
-- Same props
-- Same battery type
-- Same Blackbox settings
-- Same tuning goal
-- Same approximate flight length
-- Same route or maneuver pattern
+## 11. Single-Log Analysis
 
-## 7. Workflow A: Single-Log Analysis
-
-Use single-log analysis when you want AeroTune to answer:
+Use single-log analysis to answer:
 
 ```text
 What is wrong?
@@ -129,173 +179,28 @@ Steps:
 2. Choose drone size.
 3. Choose tuning goal.
 4. Upload the log.
-5. Review parser report, converter report, axis cards, and tuning recommendations.
-6. Make only one small change before testing again.
+5. Review PID Tuning Advice.
+6. Enter current Betaflight PID values to calculate suggested new values.
+7. Make one change pass only.
+8. Fly again and compare.
 
-## 8. Workflow B: CSV Optimizer
+## 12. Tune-Change Tracking
 
-Use the optimizer when a log has messy columns, repeated headers, metadata rows, or large exported structure.
-
-AeroTune standardizes usable CSV data into this format:
-
-```text
-time, gyro_x, gyro_y, gyro_z, setpoint_roll, setpoint_pitch, setpoint_yaw, throttle
-```
-
-The optimizer also returns parser diagnostics so users can understand missing columns, detected sample rate, detected duration, usable row count, repeated header cleanup, and optional missing fields.
-
-## 9. Workflow C: V1.4 Before/After Comparison
-
-Use comparison when you changed a tune and want to check if the after log improved.
-
-Upload:
+Use tune-change tracking when you want to validate a specific change:
 
 ```text
-Before tune log
-After tune log
-```
-
-AeroTune compares lower-is-better metrics such as:
-
-- Tracking error ratio
-- 95th-percentile absolute error
-- Propwash-band energy
-- High-frequency noise ratio
-- Absolute tracking lag
-
-The output gives an overall verdict, improvement score, confidence, axis-level results, strongest improvement axis, weakest axis, and next-step recommendation.
-
-## 10. Workflow D: V1.5 Tune-Change Tracking
-
-Use tune-change tracking when you want to validate a specific change.
-
-```text
-1. Fly a clean before log.
+1. Fly a before log.
 2. Make one clear PID/filter/rate change.
 3. Fly the same test again.
 4. Upload before and after logs.
 5. Write what changed.
-6. Let AeroTune decide whether to keep, reduce, revert, or retest.
+6. Review the keep/reduce/revert/retest result.
 ```
 
-V1.5 checks:
+## 13. Privacy and Local-Only Notes
 
-- Overall before/after score
-- Noise improvement
-- Tracking improvement
-- Propwash improvement
-- Axis-specific verdicts
-- Whether the after log is clean enough for style tuning
-- Whether the change should be kept, reduced, reverted, or retested
-
-AeroTune does not rewrite PID values automatically. The pilot still makes the final tuning decision.
-
-## 11. Workflow E: V1.5.1 Saved Reports
-
-When the tune-change form is submitted, AeroTune saves:
-
-```text
-reports/tune_changes/<report_id>.json
-reports/tune_changes/<report_id>.md
-```
-
-Saved reports include:
-
-- Before filename
-- After filename
-- Tune-change notes
-- Overall verdict
-- Improvement score
-- Confidence
-- Noise improvement
-- Tracking improvement
-- Propwash improvement
-- Axis verdicts
-- Safe-baseline / style-tuning status
-- Next step
-
-Generated tune-change reports are local working files. They are ignored by Git by default so personal flight data is not accidentally committed.
-
-## 12. Privacy and Local-Only Notes
-
-AeroTune should be treated as a local analysis tool unless proper hosting, authentication, file retention, and security controls are added.
-
-Do not publicly host the local app as-is with unrestricted uploads. Flight logs and generated reports can contain filenames, flight-analysis details, and user-written tuning notes.
-
-## 13. Common Troubleshooting
-
-### The app will not start
-
-Run from the repository root:
-
-```bash
-python3 -m uvicorn main:app --reload
-```
-
-Make sure dependencies are installed:
-
-```bash
-python3 -m pip install -r requirements.txt
-python3 -m pip install python-multipart
-```
-
-### Raw `.bbl`, `.bfl`, or `.txt` upload fails
-
-Check the converter:
-
-```bash
-echo "$BLACKBOX_DECODE_PATH"
-"$BLACKBOX_DECODE_PATH" --help
-```
-
-If the converter is missing, export CSV through Betaflight Blackbox Explorer and upload the CSV.
-
-### Parser report says required columns are missing
-
-Use Betaflight Blackbox Explorer to export a full CSV from the correct flight segment. Avoid partial logs, unsupported CSV layouts, or files that only contain metadata.
-
-### Comparison confidence is low
-
-Repeat the before/after tests with a more similar route, throttle pattern, battery type, props, and flight length.
+AeroTune is designed for local use because FPV Blackbox files can be large and can contain personal flight-analysis details. Local use avoids hosted upload limits, request timeouts, and unnecessary upload of private logs to a public server.
 
 ## 14. License Reminder
 
 AeroTune is source-available for personal non-commercial local evaluation. See `LICENSE` and `NOTICE` before copying, hosting, redistributing, modifying, forking, public release, commercializing, or reusing AeroTune code, logic, UI, docs, branding, or project materials.
-
-\pagebreak
-
-# Last Page: Converter and CSV Explanation
-
-## Why AeroTune Uses CSV for Analysis
-
-AeroTune analyzes CSV because CSV is the clean, table-shaped version of a Blackbox flight log. Once the data is in CSV form, the analyzer can reliably read columns like time, gyro, setpoint, throttle, and axis movement.
-
-Raw `.bbl`, `.bfl`, and `.txt` Blackbox files are not the best direct analysis format because they are recorder/export formats. They can include binary structure, multiple flights, metadata, firmware-specific encoding, and details that need to be decoded before normal data analysis can happen.
-
-## How Raw Blackbox Conversion Works
-
-When a raw Blackbox file is uploaded and `blackbox_decode` is available, AeroTune uses this flow:
-
-```text
-Raw .BBL / .BFL / .TXT
-        ↓
-blackbox_decode converts the raw log into CSV
-        ↓
-AeroTune parser reads the CSV columns
-        ↓
-AeroTune analyzer checks tracking, noise, propwash, lag, and axis behavior
-        ↓
-AeroTune gives conservative tuning guidance
-```
-
-In other words, AeroTune can accept raw logs, but it still analyzes the decoded CSV version. That is intentional. The converter handles the Betaflight log format; AeroTune handles the tuning logic.
-
-## Beginner Recommendation
-
-Beginners should start with Betaflight Blackbox Explorer and export CSV manually. It is easier to inspect, easier to name correctly, easier to verify, and easier to troubleshoot.
-
-Advanced users can install `blackbox_decode` so AeroTune can convert raw logs locally.
-
-## Why AeroTune Does Not Bundle blackbox_decode
-
-AeroTune keeps `blackbox_decode` external because it belongs to the Betaflight / blackbox-tools ecosystem. AeroTune calls a local copy only when the user installs it. This keeps the project cleaner, avoids bundling a separate converter binary, and makes it clear that AeroTune's job is analysis after decoding.
