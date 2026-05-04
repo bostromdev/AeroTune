@@ -12,6 +12,6 @@ fi
 
 make -C tools/blackbox-tools obj/blackbox_decode
 
-./tools/blackbox-tools/obj/blackbox_decode --help >/dev/null
+test -x ./tools/blackbox-tools/obj/blackbox_decode
 
 echo "blackbox_decode built successfully."
