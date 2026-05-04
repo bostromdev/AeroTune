@@ -20,7 +20,7 @@ from app.analyzer import (
 from app.comparison import ComparisonError, build_multilog_comparison
 from app.tune_tracking import TuneTrackingError, build_tune_change_tracking
 from app.report_store import ReportStoreError, get_tune_change_report_path, save_tune_change_report
-from app.converter import ConverterError, SUPPORTED_UPLOAD_EXTENSIONS, prepare_analysis_file
+from app.converter import ConverterError, SUPPORTED_UPLOAD_EXTENSIONS, get_converted_flight_path, prepare_analysis_file
 from app.log_validator import validate_log
 from app.parser import optimize_csv_file_with_report, parse_log_with_report
 
@@ -315,6 +315,92 @@ async def upload_log(
             file.file.close()
         except Exception:
             pass
+
+
+@app.post("/analyze-converted-flight")
+async def analyze_converted_flight(
+    conversion_id: str = Form(...),
+    flight_index: int = Form(...),
+    drone_size: str = Form("7"),
+    tuning_goal: str = Form("efficient"),
+):
+    """
+    V1.7 raw Blackbox multi-flight selector endpoint.
+
+    After a raw .BBL/.BFL/.TXT upload is decoded by blackbox_decode, AeroTune
+    keeps every generated flight CSV. This endpoint lets the UI switch from the
+    default latest flight (N/N) to any other converted flight without requiring
+    the user to upload the raw file again.
+    """
+    global LAST_FILE_PATH, LAST_OPTIMIZED_PATH, LAST_OPTIMIZED_CSV, LAST_OPTIMIZED_NAME
+
+    try:
+        size_key = normalize_drone_size(drone_size)
+        if size_key is None or size_key not in ALLOWED_DRONE_SIZES:
+            return error_response(
+                "Invalid drone size. Use 3, 3.5, 4, 5, 6, or 7.",
+                400,
+                allowed_drone_sizes=sorted(ALLOWED_DRONE_SIZES, key=float),
+            )
+
+        goal = normalize_goal(tuning_goal)
+
+        try:
+            analysis_path, converter_report = get_converted_flight_path(conversion_id, flight_index)
+        except ConverterError as exc:
+            return error_response(str(exc), 400, converter_report=exc.report)
+
+        LAST_FILE_PATH = analysis_path
+
+        parsed = parse_log_with_report(analysis_path)
+        if parsed.df is None or parsed.df.empty:
+            return error_response(
+                parsed.report.get("message", "Could not parse selected raw Blackbox flight."),
+                400,
+                converter_report=converter_report,
+                parser_report=parsed.report,
+            )
+
+        df = parsed.df
+        LAST_OPTIMIZED_NAME = f"{analysis_path.stem}_aerotune_ready.csv"
+        LAST_OPTIMIZED_PATH = save_optimized_dataframe(df, LAST_OPTIMIZED_NAME)
+        LAST_OPTIMIZED_CSV = None
+
+        validation = validate_log(df)
+        analysis = detect_oscillation(
+            df,
+            drone_size=size_key,
+            tuning_goal=goal,
+        )
+
+        return {
+            "ok": True,
+            "version": "V1.7",
+            "message": converter_report.get("message", "Selected raw Blackbox flight analyzed."),
+            "filename": analysis_path.name,
+            "source_filename": analysis_path.name,
+            "source_file_type": analysis_path.suffix.lower(),
+            "analysis_filename": analysis_path.name,
+            "converted": True,
+            "selected_from_raw_flight": True,
+            "download_available": True,
+            "download_filename": LAST_OPTIMIZED_PATH.name if LAST_OPTIMIZED_PATH else LAST_OPTIMIZED_NAME,
+            "download_url": "/download-optimized",
+            "rows": int(len(df)),
+            "columns": list(df.columns),
+            "optimized_available": True,
+            "optimized_columns": list(df.columns),
+            "converter_report": converter_report,
+            "parser_report": parsed.report,
+            "validation": validation,
+            "analysis": analysis,
+        }
+
+    except ValueError as exc:
+        return error_response(str(exc), 400)
+
+    except Exception as exc:
+        return error_response(str(exc), 500)
 
 
 @app.post("/optimize-log")

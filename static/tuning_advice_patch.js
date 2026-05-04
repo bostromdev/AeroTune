@@ -270,10 +270,17 @@ AeroTune frontend tuning-advice renderer.
       document.body;
 
     let card = document.querySelector("#aerotune-tuning-advice-card");
+    const selectorCard = document.getElementById("aerotune-raw-flight-selector-card");
+
     if (!card) {
       card = document.createElement("section");
       card.id = "aerotune-tuning-advice-card";
+    }
 
+    // Keep the raw .BBL multi-flight selector above the tuning advice card.
+    if (selectorCard && selectorCard.parentNode) {
+      selectorCard.parentNode.insertBefore(card, selectorCard.nextSibling);
+    } else if (!card.parentNode) {
       if (mount.firstChild) {
         mount.insertBefore(card, mount.firstChild);
       } else {
@@ -340,15 +347,17 @@ AeroTune frontend tuning-advice renderer.
 
     attachCalculatorEvents(advice);
 
-    // After analysis finishes, automatically bring the user back to the tuning card.
-    // This makes the recommendation impossible to miss after clicking Analyze.
+    // After analysis finishes, scroll to the most important result area.
+    // If a raw .BBL multi-flight selector exists, keep it above the PID card and scroll there first.
     setTimeout(function () {
-      const cardTop = card.getBoundingClientRect().top + window.scrollY - 16;
+      const selectorCard = document.getElementById("aerotune-raw-flight-selector-card");
+      const scrollTarget = selectorCard || card;
+      const cardTop = scrollTarget.getBoundingClientRect().top + window.scrollY - 16;
       window.scrollTo({
         top: Math.max(0, cardTop),
         behavior: "smooth"
       });
-    }, 150);
+    }, 180);
   }
 
   const originalFetch = window.fetch;

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -56,6 +57,11 @@ def _base_report(source_path: str | Path) -> Dict[str, Any]:
         "stderr": "",
         "returncode": None,
         "generated_csv_files": [],
+        "conversion_id": None,
+        "flight_count": 0,
+        "selected_flight_index": None,
+        "selected_flight_label": None,
+        "available_flights": [],
         "message": "Raw Blackbox conversion has not started.",
         "error_code": None,
         "warnings": [],
@@ -132,12 +138,152 @@ def _safe_conversion_dir(source_path: Path) -> Path:
     return CONVERSION_ROOT / f"{stem}_{uuid.uuid4().hex[:10]}"
 
 
+CONVERSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{4,120}$")
+
+
+def _natural_sort_key(path: Path) -> Tuple[Any, ...]:
+    """
+    Sort Blackbox Decode CSV outputs in flight order.
+
+    blackbox_decode commonly emits one CSV per flight with numbered suffixes.
+    The last numbered CSV is treated as the newest/default flight, matching the
+    way Blackbox Explorer lists multi-flight logs as Flight 1/N ... Flight N/N.
+    """
+    name = path.name.lower()
+    parts = re.split(r"(\d+)", name)
+    key: List[Any] = []
+    for part in parts:
+        if part.isdigit():
+            key.append(int(part))
+        else:
+            key.append(part)
+    return tuple(key)
+
+
 def _generated_csv_files(directory: Path) -> List[Path]:
+    """Return generated CSV files in oldest -> newest flight order."""
     return sorted(
         [p for p in directory.iterdir() if p.is_file() and p.suffix.lower() == ".csv"],
-        key=lambda p: p.stat().st_size,
-        reverse=True,
+        key=_natural_sort_key,
     )
+
+
+def _flight_payload(csv_files: List[Path], selected_flight_index: int) -> List[Dict[str, Any]]:
+    total = len(csv_files)
+    flights: List[Dict[str, Any]] = []
+
+    for idx, path in enumerate(csv_files, start=1):
+        flights.append(
+            {
+                "flight_index": idx,
+                "flight_count": total,
+                "label": f"Flight {idx}/{total}" + (" — latest" if idx == total else ""),
+                "filename": path.name,
+                "size_bytes": int(path.stat().st_size),
+                "is_latest": idx == total,
+                "is_selected": idx == selected_flight_index,
+            }
+        )
+
+    return flights
+
+
+def _safe_conversion_path(conversion_id: str) -> Path:
+    raw = str(conversion_id or "").strip()
+    if not CONVERSION_ID_PATTERN.match(raw) or ".." in raw or "/" in raw or "\\" in raw:
+        raise ConverterError(
+            "Invalid raw Blackbox conversion ID.",
+            {
+                "ok": False,
+                "converted": True,
+                "message": "Invalid raw Blackbox conversion ID.",
+                "error_code": "invalid_conversion_id",
+                "warnings": [],
+                "suggestions": ["Upload the raw Blackbox log again."],
+            },
+        )
+
+    root = CONVERSION_ROOT.resolve()
+    path = (CONVERSION_ROOT / raw).resolve()
+
+    if root not in path.parents and path != root:
+        raise ConverterError(
+            "Invalid raw Blackbox conversion location.",
+            {
+                "ok": False,
+                "converted": True,
+                "message": "Invalid raw Blackbox conversion location.",
+                "error_code": "invalid_conversion_path",
+                "warnings": [],
+                "suggestions": ["Upload the raw Blackbox log again."],
+            },
+        )
+
+    if not path.exists() or not path.is_dir():
+        raise ConverterError(
+            "Converted raw Blackbox flights are no longer available.",
+            {
+                "ok": False,
+                "converted": True,
+                "message": "Converted raw Blackbox flights are no longer available.",
+                "error_code": "conversion_not_found",
+                "warnings": [],
+                "suggestions": ["Upload the raw Blackbox log again."],
+            },
+        )
+
+    return path
+
+
+def get_converted_flight_path(conversion_id: str, flight_index: int) -> Tuple[Path, Dict[str, Any]]:
+    """
+    Return the selected decoded CSV for a raw multi-flight conversion.
+
+    Flight indexes are 1-based: Flight 1/N is oldest, Flight N/N is latest.
+    """
+    work_dir = _safe_conversion_path(conversion_id)
+    csv_files = _generated_csv_files(work_dir)
+
+    if not csv_files:
+        raise ConverterError(
+            "No converted CSV flights were found for this raw Blackbox log.",
+            {
+                "ok": False,
+                "converted": True,
+                "conversion_id": conversion_id,
+                "message": "No converted CSV flights were found for this raw Blackbox log.",
+                "error_code": "converted_flights_missing",
+                "warnings": [],
+                "suggestions": ["Upload the raw Blackbox log again."],
+            },
+        )
+
+    try:
+        selected_index = int(flight_index)
+    except (TypeError, ValueError):
+        selected_index = len(csv_files)
+
+    if selected_index < 1 or selected_index > len(csv_files):
+        selected_index = len(csv_files)
+
+    selected_csv = csv_files[selected_index - 1]
+    report = _base_report(selected_csv)
+    report.update(
+        {
+            "ok": True,
+            "converted": True,
+            "conversion_id": work_dir.name,
+            "flight_count": len(csv_files),
+            "selected_flight_index": selected_index,
+            "selected_flight_label": f"Flight {selected_index}/{len(csv_files)}" + (" — latest" if selected_index == len(csv_files) else ""),
+            "available_flights": _flight_payload(csv_files, selected_index),
+            "generated_csv_files": [p.name for p in csv_files],
+            "analysis_path": str(selected_csv),
+            "analysis_filename": selected_csv.name,
+            "message": f"Selected raw Blackbox Flight {selected_index}/{len(csv_files)} for analysis.",
+        }
+    )
+    return selected_csv, report
 
 
 def convert_raw_blackbox_to_csv(
@@ -253,10 +399,19 @@ def convert_raw_blackbox_to_csv(
         )
         raise ConverterError(report["message"], report)
 
-    selected_csv = csv_files[0]
+    # V1.7 behavior: Blackbox files may contain multiple flights.
+    # Keep all decoded CSVs and select the newest/default flight as Flight N/N.
+    selected_flight_index = len(csv_files)
+    selected_csv = csv_files[selected_flight_index - 1]
+    report["conversion_id"] = work_dir.name
+    report["flight_count"] = len(csv_files)
+    report["selected_flight_index"] = selected_flight_index
+    report["selected_flight_label"] = f"Flight {selected_flight_index}/{len(csv_files)}" + (" — latest" if len(csv_files) > 1 else "")
+    report["available_flights"] = _flight_payload(csv_files, selected_flight_index)
+
     if len(csv_files) > 1:
         report["warnings"].append(
-            f"blackbox_decode generated {len(csv_files)} CSV files. AeroTune selected the largest one: {selected_csv.name}."
+            f"blackbox_decode generated {len(csv_files)} flight CSVs. AeroTune selected Flight {selected_flight_index}/{len(csv_files)} as the latest/default flight."
         )
 
     gpx_files = [p.name for p in work_dir.iterdir() if p.is_file() and p.suffix.lower() == ".gpx"]
@@ -269,7 +424,7 @@ def convert_raw_blackbox_to_csv(
             "converted": True,
             "analysis_path": str(selected_csv),
             "analysis_filename": selected_csv.name,
-            "message": "Raw Blackbox log converted to CSV successfully.",
+            "message": f"Raw Blackbox log converted successfully. Selected Flight {selected_flight_index}/{len(csv_files)} for analysis.",
         }
     )
     return selected_csv, report

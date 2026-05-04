@@ -204,3 +204,26 @@ AeroTune is designed for local use because FPV Blackbox files can be large and c
 ## 14. License Reminder
 
 AeroTune is source-available for personal non-commercial local evaluation. See `LICENSE` and `NOTICE` before copying, hosting, redistributing, modifying, forking, public release, commercializing, or reusing AeroTune code, logic, UI, docs, branding, or project materials.
+
+## V1.7 Raw Blackbox Multi-Flight Selector
+
+AeroTune can analyze CSV exports directly, and it can also analyze raw `.BBL`, `.BFL`, and `.TXT` logs locally when Betaflight `blackbox_decode` is available.
+
+When a raw Blackbox file contains more than one decoded flight, AeroTune creates one selectable profile per decoded flight:
+
+```text
+Flight 1/N = oldest detected flight
+Flight N/N = newest/latest detected flight
+```
+
+The newest/latest flight is selected by default. For example, if a raw file contains seven flights, AeroTune treats `Flight 7/7` as the latest/default flight unless you manually select another one.
+
+You do not need to manually export CSV when raw conversion is set up correctly. CSV remains the safest fallback if raw conversion is missing, fails, or if you prefer choosing the exact flight in Betaflight Blackbox Explorer first.
+
+Raw conversion depends on `blackbox_decode`. AeroTune searches for it in this order:
+
+```text
+1. BLACKBOX_DECODE_PATH
+2. tools/blackbox-tools/obj/blackbox_decode
+3. system PATH
+```

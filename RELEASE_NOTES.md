@@ -1,5 +1,24 @@
 # AeroTune Release Notes
 
+## AeroTune v1.7 - Raw Blackbox Multi-Flight Selector
+
+### Major Updates
+
+- Added raw Blackbox multi-flight selector for `.BBL`, `.BFL`, and `.TXT` uploads when `blackbox_decode` is available locally.
+- AeroTune now keeps every decoded flight CSV from a raw Blackbox file instead of silently choosing one.
+- Added UI selector for `Flight 1/N` through `Flight N/N`.
+- Treats `Flight 1/N` as the oldest detected flight and `Flight N/N` as the newest/latest detected flight.
+- Selects the newest/latest flight by default.
+- Lets users analyze another decoded flight without re-uploading the raw log.
+- Updated website/helper wording so users know raw `.BBL` upload is OK after local converter setup, while CSV remains the safest fallback.
+
+### Notes
+
+Raw Blackbox support still depends on Betaflight `blackbox_decode`. AeroTune does not replace the decoder; it uses the decoded CSV output for analysis.
+
+---
+
+
 ## AeroTune v1.6.1 - CSV-First Docs + Raw Multi-Flight Planning
 
 ### Documentation Updates

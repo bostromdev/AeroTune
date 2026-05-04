@@ -6,48 +6,43 @@ AeroTune reads Betaflight Blackbox flight-log data and turns gyro/setpoint behav
 
 ## Current Best Workflow
 
-AeroTune is **CSV-first**.
+AeroTune supports two practical workflows:
 
-For the most reliable beginner workflow:
+1. **CSV direct upload** - works without extra tools.
+2. **Raw Blackbox upload** - works locally after `blackbox_decode` is installed or included at `tools/blackbox-tools/obj/blackbox_decode`.
 
-1. Open the raw `.BBL` log in Betaflight Blackbox Explorer.
-2. Select the correct flight inside that log.
-3. If there are multiple flights, the newest flight is usually the last one shown, such as `3/3` or `7/7`.
-4. Export that selected flight as CSV.
-5. Upload the CSV into AeroTune.
+For beginners, CSV is still the safest fallback because Betaflight Blackbox Explorer lets you manually choose the exact flight before exporting.
 
-This matters because a raw `.BBL` can contain more than one flight. If the wrong internal flight is decoded or exported, AeroTune can analyze the wrong flight. Choosing the correct/latest flight in Blackbox Explorer before CSV export makes the analysis more predictable.
+For users who have raw conversion set up, `.BBL`, `.BFL`, and `.TXT` logs can be uploaded directly. AeroTune decodes the raw log locally and analyzes the selected decoded flight.
 
-## Raw Blackbox Support
+## V1.7 Raw Blackbox Multi-Flight Selector
 
-AeroTune can accept raw `.BBL`, `.BFL`, and `.TXT` logs **locally** when Betaflight `blackbox_decode` is installed and available.
+AeroTune V1.7 adds a raw Blackbox multi-flight selector.
 
-Raw-log support works like this:
+When a raw `.BBL`, `.BFL`, or `.TXT` file contains more than one decoded flight, AeroTune creates one selectable profile per decoded flight:
 
 ```text
-Raw .BBL / .BFL / .TXT
-        -> blackbox_decode converts it locally
-        -> AeroTune reads the decoded CSV
-        -> AeroTune runs the tuning advisor
+Flight 1/N = oldest detected flight
+Flight N/N = newest/latest detected flight
 ```
 
-AeroTune does **not** bundle `blackbox_decode`. It calls your local copy when available. If raw upload fails, export CSV from Betaflight Blackbox Explorer instead.
+The newest/latest flight is selected by default. For example, if a raw Blackbox file contains seven flights, AeroTune treats `Flight 7/7` as the newest/default flight unless the pilot chooses another one.
 
-## Planned Raw Multi-Flight Selector
+This means you do **not** need to manually export CSV when raw conversion is set up correctly. CSV is still useful if raw conversion is missing, fails, or if you prefer manually choosing the flight in Betaflight Blackbox Explorer first.
 
-A future AeroTune upgrade can make raw `.BBL` handling easier by detecting multiple flights inside one raw log and showing a flight selector:
+## Raw Blackbox Requirements
+
+Raw upload support depends on Betaflight `blackbox_decode`. AeroTune does not replace that decoder; it calls a local copy and analyzes the decoded CSV output.
+
+AeroTune searches for `blackbox_decode` in this order:
 
 ```text
-Flight 1/7
-Flight 2/7
-Flight 3/7
-...
-Flight 7/7  <- newest / default selection
+1. BLACKBOX_DECODE_PATH
+2. tools/blackbox-tools/obj/blackbox_decode
+3. system PATH
 ```
 
-The tuning advisor would then create an analysis profile for each decoded flight and default to the highest-numbered flight. For example, if a `.BBL` contains seven flights, AeroTune should treat `7/7` as the most recent flight unless the pilot selects a different one.
-
-Until that selector is implemented, CSV export from Blackbox Explorer remains the safest workflow because the pilot manually chooses the correct flight before analysis.
+If you download AeroTune with the local `tools/blackbox-tools/obj/blackbox_decode` binary present, raw `.BBL` support can work immediately from the project folder. If the binary is missing, follow the setup instructions below or export CSV from Betaflight Blackbox Explorer.
 
 ## Main Features
 
