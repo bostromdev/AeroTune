@@ -107,6 +107,35 @@ DRONE_SIZE_PROFILES = {
             "ff": {"negative": 0.050, "positive": 0.055},
         },
     },
+    "6": {
+        "label": "6 inch heavy freestyle / long-range hybrid",
+        "bands": {
+            "low": (0.0, 30.0),
+            "mid": (30.0, 82.0),
+            "high": (82.0, 165.0),
+            "ultra": (165.0, 490.0),
+            "propwash": (40.0, 120.0),
+        },
+        "pid_scale": 1.08,
+        "clean_goal_scale": 0.95,
+        "tracking_thresholds": {
+            "error_ideal": 0.30,
+            "error_warn": 0.50,
+            "lag_ideal_ms": 30.0,
+            "lag_warn_ms": 50.0,
+            "overshoot_attention": 0.24,
+            "overshoot_bad": 0.34,
+            "noise_band_warn": 0.46,
+            "gyro_high_warn": 0.58,
+            "mid_vibration_warn": 0.48,
+        },
+        "pid_caps": {
+            "p": {"negative": 0.055, "positive": 0.045},
+            "i": {"negative": 0.035, "positive": 0.040},
+            "d": {"negative": 0.045, "positive": 0.050},
+            "ff": {"negative": 0.050, "positive": 0.055},
+        },
+    },
     "7": {
         "label": "7 inch long-range / heavy freestyle",
         "bands": {
@@ -542,48 +571,83 @@ def _confidence(stats: AxisStats, base: float) -> float:
     return float(np.clip(value, 0.0, 0.98))
 
 
-def _classify(axis: str, stats: AxisStats) -> Tuple[str, float, str]:
-    # Clean is NOT first. Problem evidence must win before a log is called clean.
+def _profile_thresholds(profile: Dict[str, Any]) -> Dict[str, float]:
+    return {
+        "error_ideal": 0.090,
+        "error_warn": 0.095,
+        "lag_ideal_ms": 18.0,
+        "lag_warn_ms": 32.0,
+        "overshoot_attention": 0.27,
+        "overshoot_bad": 0.40,
+        "noise_band_warn": 0.38,
+        "gyro_high_warn": 0.50,
+        "mid_vibration_warn": 0.42,
+        **profile.get("tracking_thresholds", {}),
+    }
+
+
+def _classify(axis: str, stats: AxisStats, profile: Optional[Dict[str, Any]] = None) -> Tuple[str, float, str]:
+    profile = profile or {}
+    t = _profile_thresholds(profile)
+
     noise_band = stats.high_ratio + stats.ultra_ratio
-    residual_noise = (noise_band >= 0.38 and stats.error_ratio > 0.045) or (axis == "yaw" and noise_band >= 0.25 and stats.error_ratio > 0.075)
-    gyro_noise = stats.gyro_high_ratio >= 0.50 and stats.gyro_rms > 0.02
+
+    # Real noise gate:
+    # Only block D increases when high-frequency content is strong AND tracking error is elevated.
+    # This prevents healthy 6" builds from being called "harsh/noisy" just because unfiltered gyro is active.
+    residual_noise = (
+        noise_band >= t["noise_band_warn"]
+        and stats.error_ratio > max(0.070, t["error_ideal"] * 0.23)
+    )
+    gyro_noise = (
+        stats.gyro_high_ratio >= t["gyro_high_warn"]
+        and stats.gyro_rms > 0.025
+        and stats.error_ratio > 0.070
+    )
     if residual_noise or gyro_noise:
         reason = "high-frequency residual noise" if residual_noise else "high-frequency gyro vibration"
         return "high_frequency_noise", _confidence(stats, 0.80), reason
 
-    if stats.high_throttle_error_ratio >= 1.32 and stats.error_ratio > 0.075:
+    if stats.high_throttle_error_ratio >= 1.36 and stats.error_ratio > 0.085:
         return "high_throttle_oscillation", _confidence(stats, 0.77), "error rises mainly at high throttle"
 
     dirty_air = (
-        stats.throttle_error_ratio >= 1.20
-        and stats.error_ratio > 0.080
-        and (stats.propwash_ratio >= 0.14 or stats.mid_ratio >= 0.16 or stats.spike_ratio >= 1.15)
+        stats.throttle_error_ratio >= 1.24
+        and stats.error_ratio > 0.090
+        and (stats.propwash_ratio >= 0.16 or stats.mid_ratio >= 0.18 or stats.spike_ratio >= 1.18)
     )
-    bounceback = stats.stop_overshoot_ratio >= 0.27 and stats.error_ratio > 0.080
+
+    # Bounceback/overshoot gets priority on 6" if noise is acceptable.
+    bounceback = (
+        stats.stop_overshoot_ratio >= t["overshoot_attention"]
+        and stats.error_ratio > 0.070
+    )
+
     if dirty_air:
         return "propwash", _confidence(stats, 0.82), "tracking error spikes around throttle movement / disturbed air"
-    if bounceback:
-        return "bounceback", _confidence(stats, 0.80), "overshoot after command stops"
 
-    if stats.mid_ratio >= 0.42 and stats.error_ratio > 0.055:
+    if bounceback:
+        return "bounceback", _confidence(stats, 0.82), "overshoot after command stops"
+
+    if stats.mid_ratio >= t["mid_vibration_warn"] and stats.error_ratio > 0.070:
         return "mid_frequency_vibration", _confidence(stats, 0.74), "mid-band residual vibration"
 
-    if stats.low_ratio >= 0.66 and stats.error_ratio > 0.115 and not _is_clean(stats):
+    if stats.low_ratio >= 0.68 and stats.error_ratio > 0.125 and not _is_clean(stats):
         return "low_frequency_oscillation", _confidence(stats, 0.72), "slow residual wobble with elevated error"
 
-    if stats.quiet_drift_ratio >= 1.35 and stats.error_ratio > 0.075:
+    if stats.quiet_drift_ratio >= 1.40 and stats.error_ratio > 0.085:
         return "drift_or_weak_hold", _confidence(stats, 0.70), "error persists during low stick input"
 
-    if stats.corr is not None and stats.corr < 0.86 and stats.error_ratio > 0.080:
+    if stats.corr is not None and stats.corr < 0.86 and stats.error_ratio > 0.090:
         return "poor_tracking", _confidence(stats, 0.70), "gyro/setpoint correlation is low"
 
-    if stats.lag_ms is not None and stats.lag_ms > 32 and stats.error_ratio > 0.065:
+    if stats.lag_ms is not None and stats.lag_ms > t["lag_warn_ms"] and stats.error_ratio > 0.070:
         return "slow_response", _confidence(stats, 0.68), "gyro response lags setpoint"
 
-    if _is_clean(stats):
-        return "clean", _confidence(stats, 0.90), "high tracking, low residual error, no dominant problem band"
+    if _is_clean(stats) or stats.error_ratio <= t["error_ideal"]:
+        return "clean", _confidence(stats, 0.90), "tracking error is inside this size profile's acceptable range"
 
-    if stats.error_ratio > 0.095:
+    if stats.error_ratio > t["error_warn"]:
         return "soft_tracking_error", _confidence(stats, 0.66), "residual tracking error is elevated"
 
     return "clean", _confidence(stats, 0.82), "no major PID problem detected"
@@ -960,7 +1024,7 @@ def detect_oscillation(df: pd.DataFrame, drone_size: str = "7", tuning_goal: str
         setpoint = df[setpoint_col].to_numpy(dtype=float) if setpoint_col in df.columns else np.zeros_like(gyro)
 
         stats = _axis_stats(time, gyro, setpoint, throttle, bands)
-        issue, confidence, reason = _classify(axis_name, stats)
+        issue, confidence, reason = _classify(axis_name, stats, drone_profile)
         base_delta = _base_delta(axis_name, issue)
         pid_delta = _apply_goal(axis_name, issue, base_delta, goal)
         pid_delta = _apply_size_pid_limits(axis_name, issue, pid_delta, drone_profile)
