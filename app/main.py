@@ -201,6 +201,25 @@ def optimized_csv_response(csv_text: str, filename: str = "aerotune_optimized.cs
     )
 
 
+
+def normalize_drone_size(value):
+    raw = str(value or "6").strip().lower()
+    raw = raw.replace('"', "").replace("inch", "").replace("in", "").strip()
+    if raw in {"3", "3.0"}:
+        return "3"
+    if raw in {"3.5", "3_5"}:
+        return "3.5"
+    if raw in {"4", "4.0"}:
+        return "4"
+    if raw in {"5", "5.0"}:
+        return "5"
+    if raw in {"6", "6.0"}:
+        return "6"
+    if raw in {"7", "7.0"}:
+        return "7"
+    return raw
+
+
 @app.get("/", response_class=HTMLResponse)
 def home():
     try:
@@ -260,7 +279,8 @@ async def upload_log(
         LAST_OPTIMIZED_CSV = None
 
         validation = validate_log(df)
-        analysis = detect_oscillation(df, drone_size=size_key, tuning_goal=goal)
+        analysis = detect_oscillation(df, drone_size=size_key, tu
+drone_size = normalize_drone_size(drone_size)ning_goal=goal)
 
         return {
             "filename": saved_path.name,
