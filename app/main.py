@@ -228,7 +228,7 @@ async def upload_log(
         size_key = normalize_drone_size(drone_size)
         if size_key is None or size_key not in ALLOWED_DRONE_SIZES:
             return error_response(
-                "Invalid drone size. Use 3, 3.5, 4, 5, or 7.",
+                "Invalid drone size. Use 3, 3.5, 4, 5, 6, or 7.",
                 400,
                 allowed_drone_sizes=sorted(ALLOWED_DRONE_SIZES, key=float),
             )
@@ -386,7 +386,7 @@ async def compare_logs(
         size_key = normalize_drone_size(drone_size)
         if size_key is None or size_key not in ALLOWED_DRONE_SIZES:
             return error_response(
-                "Invalid drone size. Use 3, 3.5, 4, 5, or 7.",
+                "Invalid drone size. Use 3, 3.5, 4, 5, 6, or 7.",
                 400,
                 allowed_drone_sizes=sorted(ALLOWED_DRONE_SIZES, key=float),
             )
@@ -539,7 +539,7 @@ async def track_tune_change(
         size_key = normalize_drone_size(drone_size)
         if size_key is None or size_key not in ALLOWED_DRONE_SIZES:
             return error_response(
-                "Invalid drone size. Use 3, 3.5, 4, 5, or 7.",
+                "Invalid drone size. Use 3, 3.5, 4, 5, 6, or 7.",
                 400,
                 allowed_drone_sizes=sorted(ALLOWED_DRONE_SIZES, key=float),
             )
