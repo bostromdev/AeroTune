@@ -279,8 +279,11 @@ async def upload_log(
         LAST_OPTIMIZED_CSV = None
 
         validation = validate_log(df)
-        analysis = detect_oscillation(df, drone_size=size_key, tu
-drone_size = normalize_drone_size(drone_size)ning_goal=goal)
+        analysis = detect_oscillation(
+            df,
+            drone_size=size_key,
+            tuning_goal=goal,
+        )
 
         return {
             "filename": saved_path.name,

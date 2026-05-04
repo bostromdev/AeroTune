@@ -2,6 +2,10 @@
 # Source-available for personal evaluation only. See LICENSE and NOTICE.
 
 from __future__ import annotations
+try:
+    from app.tuning_advisor import attach_tuning_advice
+except Exception:
+    from .tuning_advisor import attach_tuning_advice
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
@@ -955,7 +959,7 @@ def _workflow_summary(axes: Dict[str, Dict[str, Any]], gate: Dict[str, Any]) -> 
         return "Clean baseline detected. Optional small P/FF decrease may be used for smoother cinematic feel."
     return "Clean baseline detected. No PID change needed for Efficient/Smooth."
 
-def detect_oscillation(df: pd.DataFrame, drone_size: str = "7", tuning_goal: str = "efficient") -> Dict[str, Any]:
+def _detect_oscillation_core(df: pd.DataFrame, drone_size: str = "7", tuning_goal: str = "efficient") -> Dict[str, Any]:
     goal = normalize_goal(tuning_goal)
     requested_goal = goal
 
@@ -1184,3 +1188,30 @@ def detect_oscillation(df: pd.DataFrame, drone_size: str = "7", tuning_goal: str
         "common_problem_library": COMMON_PROBLEM_LIBRARY,
         "source_references": SOURCE_REFERENCES,
     }
+
+def detect_oscillation(*args, **kwargs):
+    """
+    Compatibility wrapper added by AeroTune tuning advisor patch.
+
+    It runs the original analyzer, then attaches conservative Betaflight
+    PID delta suggestions based on gyro/setpoint behavior.
+    """
+    analysis = _detect_oscillation_core(*args, **kwargs)
+
+    df = args[0] if args else kwargs.get("df")
+    drone_size = kwargs.get("drone_size", "5")
+    tuning_goal = kwargs.get("tuning_goal", kwargs.get("goal", "balanced"))
+
+    try:
+        return attach_tuning_advice(
+            analysis=analysis,
+            df=df,
+            drone_size=str(drone_size),
+            tuning_goal=str(tuning_goal),
+        )
+    except Exception as exc:
+        if isinstance(analysis, dict):
+            analysis["tuning_advice_error"] = str(exc)
+            return analysis
+        return analysis
+
