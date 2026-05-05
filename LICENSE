@@ -1,19 +1,124 @@
-AeroTune Source-Available License
+AeroTune Source-Available Supporter License
 
 Copyright © 2026 Christopher Bostrom. All Rights Reserved.
 
-This repository is source-available for personal review, testing, educational inspection, and portfolio demonstration only.
+This license applies to AeroTune, including its source code, analyzer logic, parser logic, comparison logic, tuning recommendation logic, user interface, documentation, project materials, branding, and related files unless a specific file states otherwise.
 
-Permission is granted to view the source code and run an unmodified copy of AeroTune locally for personal, non-commercial evaluation only, including analyzing your own Betaflight Blackbox logs.
+AeroTune is source-available, not open-source software.
 
-No permission is granted to copy, redistribute, modify, repackage, sublicense, sell, commercialize, host as a service, publish derivative works, or reuse AeroTune's source code, analyzer logic, parser logic, comparison logic, UI structure, documentation, branding, or project materials in another project without prior written permission from Christopher Bostrom.
+Access to the source code does not grant ownership of the project and does not grant permission to copy, resell, rehost, redistribute, commercialize, or reuse AeroTune in another product without written permission from Christopher Bostrom.
 
-You may not remove copyright notices, attribution notices, license notices, or project ownership notices.
+1. PUBLIC WEB USE
 
-You may not represent AeroTune or derivative work as your own project.
+The public AeroTune web version may be used to analyze your own FPV drone logs through the official AeroTune website when available.
 
-Contributions, collaborations, commercial licensing, educational use beyond personal testing, or reuse requests require written permission from Christopher Bostrom.
+Public web use is allowed for personal, educational, and non-commercial FPV tuning review.
 
-Third-party components remain under their respective licenses. AeroTune does not bundle or redistribute Betaflight blackbox-tools or blackbox_decode.
+You may not abuse, scrape, overload, mirror, clone, rehost, or automate against the public AeroTune website in a way that harms the service, bypasses access limits, or copies the service into another product.
 
-THE SOFTWARE IS PROVIDED FOR PERSONAL EVALUATION ONLY, WITHOUT WARRANTY OF ANY KIND. USE AT YOUR OWN RISK. FPV drone tuning can affect flight safety. Always test carefully, make small changes, and verify motor temperature and flight behavior.
+2. APPROVED SUPPORTER LOCAL ACCESS
+
+Approved AeroTune supporters may be granted access to a private local analyzer repository through Patreon or another official AeroTune support channel.
+
+Approved supporter access allows you to:
+
+- View the AeroTune source code.
+- Clone the private supporter repository.
+- Run AeroTune locally on your own machine.
+- Analyze your own Betaflight Blackbox logs.
+- Use AeroTune for personal, non-commercial FPV tuning review.
+- Receive access to updates while your access remains active and the supporter repository remains maintained.
+
+Approved supporter access does not allow you to:
+
+- Resell AeroTune.
+- Redistribute AeroTune.
+- Rehost AeroTune as your own website, app, API, or paid service.
+- Publish the private source code.
+- Share private repository access with other people.
+- Sublicense AeroTune.
+- Copy AeroTune logic into another project.
+- Sell AeroTune analysis as your own software product.
+- Remove attribution, copyright notices, license notices, or ownership notices.
+- Claim AeroTune or derivative work as your own original project.
+
+3. PATREON AND SUPPORTER TERMS
+
+A Patreon pledge, donation, supporter tier, or paid support option does not transfer ownership of AeroTune.
+
+Supporter access is personal to the approved supporter account.
+
+Lifetime local repository access, when offered, means access for the life of the supported AeroTune local repository while the supporter follows these license terms, the repository remains available, and AeroTune remains maintained by the original maintainer.
+
+Access may be revoked if these terms are violated, if access is abused, if private files are redistributed, or if AeroTune is copied into another public or paid product without permission.
+
+Lower support tiers may include Discord or community access only. Local repository access is only included when specifically offered through an approved support tier or direct written permission.
+
+4. LOG REVIEW AND TUNING SUPPORT
+
+AeroTune log reviews, written recommendations, Discord discussion, voice calls, video calls, or full drone support are educational and advisory.
+
+No tuning recommendation is guaranteed to make a drone safe, perfect, faster, more efficient, or crash-proof.
+
+Every FPV drone build is different. Frame stiffness, motor size, prop size, ESC firmware, gyro noise, filtering, battery condition, mechanical condition, pilot style, and environment can all affect flight behavior.
+
+You are responsible for your own aircraft, tuning decisions, testing process, flight safety, and compliance with applicable rules or laws.
+
+Always test carefully, make small changes, check motor temperature, inspect the aircraft mechanically, and revert changes if the drone sounds noisy, motors get hot, or flight behavior becomes unsafe.
+
+5. RESTRICTIONS
+
+Without prior written permission from Christopher Bostrom, you may not:
+
+- Copy AeroTune into another public repository.
+- Copy AeroTune into another private commercial repository.
+- Repackage AeroTune under another name.
+- Sell AeroTune or modified AeroTune builds.
+- Rehost AeroTune as a competing web service.
+- Offer AeroTune as a paid SaaS, API, app, or tuning platform.
+- Use AeroTune branding, name, logo, UI identity, documentation, or project materials in a way that suggests ownership, partnership, endorsement, or official affiliation.
+- Remove or alter copyright, attribution, license, or ownership notices.
+- Publish derivative works based on AeroTune source code, analyzer logic, parser logic, comparison logic, tuning recommendation logic, UI structure, documentation, or project materials.
+
+6. COMMERCIAL PERMISSION
+
+Commercial use, resale rights, redistribution rights, rehosting rights, paid integration, private business use beyond personal/local analysis, or permission to build derivative products requires written permission from Christopher Bostrom.
+
+Permission must be granted in writing. Silence, repository access, Discord access, Patreon support, payment, or possession of source code does not create commercial permission.
+
+7. CONTRIBUTIONS
+
+If you submit code, documentation, bug reports, feature ideas, tuning logic, pull requests, or other contributions to AeroTune, you grant Christopher Bostrom permission to use, modify, publish, distribute, and incorporate those contributions into AeroTune.
+
+Submitting a contribution does not grant you ownership of AeroTune and does not create resale, redistribution, rehosting, or commercial rights.
+
+8. THIRD-PARTY COMPONENTS
+
+Third-party components, libraries, tools, and dependencies remain under their respective licenses.
+
+AeroTune may reference or interoperate with third-party FPV tools, but those projects remain owned by their respective authors.
+
+AeroTune does not claim ownership of Betaflight, Blackbox tools, blackbox_decode, or any third-party software not created by Christopher Bostrom.
+
+9. NO WARRANTY
+
+AeroTune is provided "AS IS" without warranty of any kind.
+
+To the maximum extent permitted by law, Christopher Bostrom disclaims all warranties, express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, non-infringement, accuracy, reliability, safety, or suitability for FPV drone tuning.
+
+10. LIMITATION OF LIABILITY
+
+To the maximum extent permitted by law, Christopher Bostrom shall not be liable for any crash, injury, property damage, data loss, lost profit, lost revenue, motor damage, ESC damage, flight controller damage, battery damage, aircraft loss, unsafe flight behavior, or any direct, indirect, incidental, special, consequential, or punitive damages arising from use of AeroTune, AeroTune recommendations, supporter access, Discord discussion, log review, or tuning support.
+
+Use AeroTune and any tuning recommendation at your own risk.
+
+11. TERMINATION
+
+Any permission granted under this license ends automatically if you violate these terms.
+
+Upon termination, you must stop using private AeroTune source code, delete local private copies if requested, and stop accessing or sharing supporter-only materials.
+
+12. CONTACT
+
+For commercial licensing, collaboration, redistribution permission, educational use beyond personal review, or other written permission requests, contact the AeroTune maintainer through the official AeroTune project channels.
+
