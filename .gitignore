@@ -38,3 +38,16 @@ AEROTUNE_*_README.md
 reports/tune_changes/*.json
 reports/tune_changes/*.md
 !reports/tune_changes/.gitkeep
+
+# AeroTune local-only files
+*.zip
+sample_logs/*.BBL
+sample_logs/*.bbl
+sample_logs/*.BFL
+sample_logs/*.bfl
+sample_logs/*.TXT
+sample_logs/*.txt
+uploads/*
+!uploads/.gitkeep
+reports/*
+!reports/.gitkeep
