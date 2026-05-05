@@ -438,6 +438,82 @@
     }
 
 
+    /* AEROTUNE V1.8 PILOT-FEEL UI
+       Role: lets the pilot add real flight feel to the upload, so the backend can
+       combine human observations with Blackbox signal evidence. */
+    .pilot-feel-block {
+      border: 1px solid rgba(99, 214, 255, 0.22);
+      background: rgba(9, 19, 24, 0.58);
+      border-radius: 14px;
+      padding: 12px;
+      margin-top: 12px;
+    }
+
+    .pilot-feel-toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .pilot-feel-toolbar button {
+      width: auto;
+      margin-top: 0;
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+
+    .pilot-feel-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .pilot-feel-category {
+      border: 1px solid var(--line);
+      background: #091318;
+      border-radius: 12px;
+      padding: 10px;
+    }
+
+    .pilot-feel-category-title {
+      color: #d9eef4;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .pilot-feel-options {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .pilot-feel-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      color: #cce7ef;
+      font-size: 12px;
+      line-height: 1.35;
+      border: 1px solid rgba(38, 59, 69, 0.7);
+      border-radius: 10px;
+      padding: 8px;
+      background: rgba(13, 23, 29, 0.72);
+      margin: 0;
+    }
+
+    .pilot-feel-option input[type="checkbox"] {
+      width: auto;
+      min-width: 15px;
+      margin-top: 2px;
+      accent-color: var(--accent);
+    }
+
+
     .workflow-note {
       border: 1px solid rgba(255, 202, 95, 0.38);
       background: rgba(255, 202, 95, 0.08);
@@ -466,6 +542,7 @@
       .report { grid-template-columns: 1fr; }
       .useful-summary { grid-template-columns: 1fr; }
       .compare-metrics { grid-template-columns: 1fr; }
+      .pilot-feel-options { grid-template-columns: 1fr; }
     }
   </style>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
@@ -518,6 +595,18 @@
               Safe workflow: get a clean Efficient/Smooth baseline log first. Once noise, propwash, bounceback, weak hold, and tracking problems are clean, switch to Locked-In or Cinematic to shape the feel. If the log is dirty, AeroTune will hold style modes back and use baseline cleanup logic.
             </div>
 
+            <div class="pilot-feel-block">
+              <label>Pilot Flight Feel</label>
+              <p class="small">
+                Select anything you actually felt during this flight. AeroTune uses these notes with the Blackbox log to avoid blind PID/filter changes and build a real tuning plan.
+              </p>
+              <div class="pilot-feel-toolbar">
+                <button class="secondary" id="pilotFeelGoodPreset" type="button">Good + cool preset</button>
+                <button class="secondary" id="pilotFeelClear" type="button">Clear feel notes</button>
+              </div>
+              <div id="pilotFeelOptions" class="pilot-feel-grid"></div>
+            </div>
+
             <button id="analyzeBtn" type="submit">Analyze Log</button>
           </form>
 
@@ -561,23 +650,47 @@
 
 
         <div class="card">
-          <h2>V1.5 Tune-Change Tracking</h2>
+          <h2>V1.9 Tune-Change Tracking</h2>
           <p class="small">
-            Upload the before log, upload the after log, then describe exactly what changed. AeroTune compares the logs and tells you whether the change helped, hurt, or needs another test.
+            Track one controlled change from a raw multi-flight Blackbox log. Decode once, choose the before/after flights, record what changed, then AeroTune fills the comparison automatically.
           </p>
 
-          <form id="trackForm">
-            <label for="trackBeforeLogFile">Before Tune Log</label>
-            <input id="trackBeforeLogFile" name="before_file" type="file" accept=".csv,.bbl,.bfl,.txt,text/csv" required />
+          <div class="workflow-note">
+            Best workflow: decode the raw .BBL, choose the flight before recommendations as baseline, choose the flight after your change, fill Tune Change Details, then click Track Selected Raw Flights. AeroTune uses those selected flights automatically — no extra before/after file upload needed.
+          </div>
 
-            <label for="trackAfterLogFile">After Tune Log</label>
-            <input id="trackAfterLogFile" name="after_file" type="file" accept=".csv,.bbl,.bfl,.txt,text/csv" required />
+          <div class="pilot-feel-block">
+            <label>Raw multi-flight Blackbox log</label>
+            <p class="small">
+              Upload one .BBL/.BFL/.TXT containing multiple flights. AeroTune decodes it once, shows the available Flight 1/N options, and defaults to the newest two flights.
+            </p>
+            <form id="rawTrackPrepareForm">
+              <label for="trackRawLogFile">Raw Blackbox Log With Multiple Flights</label>
+              <input id="trackRawLogFile" name="raw_file" type="file" accept=".bbl,.bfl,.txt" />
+              <button id="rawTrackPrepareBtn" type="submit">Decode Raw Log / Choose Flights</button>
+            </form>
+            <div id="rawTrackPairPanel" class="message" style="margin-top:12px;">No raw multi-flight log prepared yet.</div>
+          </div>
 
-            <label for="tuneChanges">What changed?</label>
-            <textarea id="tuneChanges" name="tune_changes" placeholder="Example: Raised roll D 2%, lowered pitch P 1%, left yaw unchanged, same props and battery type." required></textarea>
+          <div class="pilot-feel-block" id="tuneChangeDetailsBlock">
+            <label>Tune Change Details</label>
+            <p class="small">
+              Select everything that changed between the before and after flight. These are context flags, not stacked PID commands. AeroTune still caps recommendations and compares the actual logs.
+            </p>
+            <div class="pilot-feel-toolbar">
+              <button class="secondary" id="tuneChangeClear" type="button">Clear change options</button>
+              <button class="secondary" id="tuneChangeSameTestPreset" type="button">Same-route preset</button>
+            </div>
+            <div id="tuneChangeOptions" class="pilot-feel-grid"></div>
 
-            <button id="trackBtn" type="submit">Track Tune Change</button>
-          </form>
+            <label for="tuneChanges">Extra notes</label>
+            <textarea id="tuneChanges" name="tune_changes" placeholder="Example: Raised roll D 2%, lowered pitch P 1%, same props and battery type."></textarea>
+
+            <div class="pilot-feel-toolbar" style="margin-top:12px;">
+              <button id="trackRawPairBtn" type="button" disabled>Track Selected Raw Flights</button>
+            </div>
+            <div id="rawTrackPairStatus" class="small" style="margin-top:10px;">Decode a raw multi-flight log, choose before/after flights, then track selected raw flights.</div>
+          </div>
 
           <div id="trackStatus" class="message">No tune-change report yet.</div>
         </div>
@@ -656,10 +769,12 @@
     const optimizeForm = document.getElementById("optimizeForm");
     const compareForm = document.getElementById("compareForm");
     const trackForm = document.getElementById("trackForm");
+    const rawTrackPrepareForm = document.getElementById("rawTrackPrepareForm");
     const analyzeBtn = document.getElementById("analyzeBtn");
     const optimizeBtn = document.getElementById("optimizeBtn");
     const compareBtn = document.getElementById("compareBtn");
     const trackBtn = document.getElementById("trackBtn");
+    const rawTrackPrepareBtn = document.getElementById("rawTrackPrepareBtn");
 
     const parserStatus = document.getElementById("parserStatus");
     const parserReport = document.getElementById("parserReport");
@@ -687,9 +802,500 @@
     const trackingResult = document.getElementById("trackingResult");
     const trackingPanel = document.getElementById("trackingPanel");
     const trackingMachineOutput = document.getElementById("trackingMachineOutput");
+    const rawTrackPairPanel = document.getElementById("rawTrackPairPanel");
+    const tuneChanges = document.getElementById("tuneChanges");
     const downloadAnalyzed = document.getElementById("downloadAnalyzed");
 
     let lastAnalysis = null;
+    let rawTuneTrackingState = null;
+
+
+    // AEROTUNE V1.8 PILOT-FEEL CHECKBOX CATALOG
+    // This mirrors app/pilot_feel.py so the upload form can work without waiting
+    // on an API request. The backend remains the source of truth and ignores
+    // unknown IDs safely.
+    const PILOT_FEEL_OPTIONS = [
+      { id: "felt_good", label: "Felt good / no major issue", category: "Baseline" },
+      { id: "good_baseline_hold", label: "Use this as a good baseline / hold current tune", category: "Baseline" },
+      { id: "motors_cool", label: "Motors stayed cool", category: "Motor temperature" },
+      { id: "motors_warm", label: "Motors were warm", category: "Motor temperature" },
+      { id: "motors_hot", label: "Motors were hot", category: "Motor temperature" },
+      { id: "felt_loose_floaty", label: "Felt loose / floaty", category: "Flight feel" },
+      { id: "felt_locked_in", label: "Felt locked-in", category: "Flight feel" },
+      { id: "twitchy_too_sharp", label: "Felt twitchy / too sharp", category: "Flight feel" },
+      { id: "slow_throttle_response", label: "Slow throttle response", category: "Throttle feel" },
+      { id: "center_stick_too_sensitive", label: "Too sensitive around center stick", category: "Stick feel" },
+      { id: "not_enough_center_authority", label: "Not enough center-stick authority", category: "Stick feel" },
+      { id: "roll_weak", label: "Roll feels weak", category: "Axis feel" },
+      { id: "pitch_weak", label: "Pitch feels weak", category: "Axis feel" },
+      { id: "yaw_weak", label: "Yaw feels weak", category: "Axis feel" },
+      { id: "tracking_delayed", label: "Roll/pitch tracking feels delayed", category: "Tracking" },
+      { id: "recovery_slow", label: "Recovery feels slow after maneuvers", category: "Tracking" },
+      { id: "bounceback", label: "Bounceback after flips or rolls", category: "Maneuver symptoms" },
+      { id: "propwash", label: "Propwash after hard turns or drops", category: "Maneuver symptoms" },
+      { id: "low_throttle_wobbles", label: "Wobbles during low throttle", category: "Throttle symptoms" },
+      { id: "high_throttle_wobbles", label: "Wobbles during high throttle", category: "Throttle symptoms" },
+      { id: "throttle_punch_oscillation", label: "Oscillation during throttle punches", category: "Throttle symptoms" },
+      { id: "fast_forward_shake", label: "Shaking during fast forward flight", category: "Vibration / noise" },
+      { id: "low_throttle_drift_or_fall", label: "Drifts or falls at low throttle", category: "Low throttle" },
+      { id: "low_throttle_climb", label: "Climbs too easily at low throttle", category: "Low throttle" },
+      { id: "underpowered", label: "Feels underpowered", category: "Power feel" },
+      { id: "overpowered", label: "Feels overpowered / hard to manage", category: "Power feel" },
+      { id: "motors_rough_buzzy", label: "Motors sounded rough or buzzy", category: "Vibration / noise" },
+      { id: "one_motor_different", label: "One motor sounded different", category: "Vibration / noise" },
+      { id: "video_jello", label: "Video had vibration / jello", category: "Vibration / noise" },
+      { id: "rx_failsafe_or_arming_warnings", label: "Had RX failsafe or arming warnings", category: "Config / safety" },
+      { id: "rpm_filter_caused_issues", label: "RPM filter caused issues", category: "Filtering" },
+      { id: "dynamic_notch_enabled", label: "Dynamic notch was enabled", category: "Filtering" },
+      { id: "dynamic_notch_disabled", label: "Dynamic notch was disabled", category: "Filtering" },
+      { id: "rpm_filter_enabled", label: "RPM filter was enabled", category: "Filtering" },
+      { id: "pids_changed_before_flight", label: "I changed PIDs before this flight", category: "Changed before flight" },
+      { id: "filters_changed_before_flight", label: "I changed filters before this flight", category: "Changed before flight" },
+      { id: "props_changed_before_flight", label: "I changed props before this flight", category: "Changed before flight" },
+      { id: "crash_or_hit_something", label: "I crashed or hit something during this flight", category: "Changed before flight" },
+    ];
+
+    function renderPilotFeelOptions(options = PILOT_FEEL_OPTIONS) {
+      const mount = document.getElementById("pilotFeelOptions");
+      if (!mount) return;
+
+      const grouped = options.reduce((acc, item) => {
+        if (!acc[item.category]) acc[item.category] = [];
+        acc[item.category].push(item);
+        return acc;
+      }, {});
+
+      mount.innerHTML = Object.entries(grouped).map(([category, items]) => `
+        <div class="pilot-feel-category">
+          <div class="pilot-feel-category-title">${category}</div>
+          <div class="pilot-feel-options">
+            ${items.map(item => `
+              <label class="pilot-feel-option">
+                <input type="checkbox" name="pilot_feel" value="${item.id}" />
+                <span>${item.label}</span>
+              </label>
+            `).join("")}
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function setPilotFeelPreset(values) {
+      const wanted = new Set(values);
+      document.querySelectorAll("input[name='pilot_feel']").forEach((box) => {
+        box.checked = wanted.has(box.value);
+      });
+    }
+
+    renderPilotFeelOptions();
+
+    document.getElementById("pilotFeelGoodPreset")?.addEventListener("click", () => {
+      setPilotFeelPreset(["felt_good", "good_baseline_hold", "motors_cool", "dynamic_notch_enabled"]);
+    });
+
+    document.getElementById("pilotFeelClear")?.addEventListener("click", () => {
+      setPilotFeelPreset([]);
+    });
+
+
+    // AEROTUNE V1.9 TUNE-CHANGE CHECKBOX CATALOG
+    // These mirror app/tune_change_options.py. They describe what changed
+    // between before and after flights. They do NOT add PID percentages.
+    const TUNE_CHANGE_OPTIONS = [
+      {
+            "id": "raised_roll_p",
+            "label": "Raised roll P",
+            "category": "PID changes"
+      },
+      {
+            "id": "lowered_roll_p",
+            "label": "Lowered roll P",
+            "category": "PID changes"
+      },
+      {
+            "id": "raised_pitch_p",
+            "label": "Raised pitch P",
+            "category": "PID changes"
+      },
+      {
+            "id": "lowered_pitch_p",
+            "label": "Lowered pitch P",
+            "category": "PID changes"
+      },
+      {
+            "id": "raised_roll_i",
+            "label": "Raised roll I",
+            "category": "PID changes"
+      },
+      {
+            "id": "lowered_roll_i",
+            "label": "Lowered roll I",
+            "category": "PID changes"
+      },
+      {
+            "id": "raised_pitch_i",
+            "label": "Raised pitch I",
+            "category": "PID changes"
+      },
+      {
+            "id": "lowered_pitch_i",
+            "label": "Lowered pitch I",
+            "category": "PID changes"
+      },
+      {
+            "id": "raised_roll_d",
+            "label": "Raised roll D",
+            "category": "PID changes"
+      },
+      {
+            "id": "lowered_roll_d",
+            "label": "Lowered roll D",
+            "category": "PID changes"
+      },
+      {
+            "id": "raised_pitch_d",
+            "label": "Raised pitch D",
+            "category": "PID changes"
+      },
+      {
+            "id": "lowered_pitch_d",
+            "label": "Lowered pitch D",
+            "category": "PID changes"
+      },
+      {
+            "id": "raised_roll_dmax",
+            "label": "Raised roll D Max",
+            "category": "PID changes"
+      },
+      {
+            "id": "lowered_roll_dmax",
+            "label": "Lowered roll D Max",
+            "category": "PID changes"
+      },
+      {
+            "id": "raised_pitch_dmax",
+            "label": "Raised pitch D Max",
+            "category": "PID changes"
+      },
+      {
+            "id": "lowered_pitch_dmax",
+            "label": "Lowered pitch D Max",
+            "category": "PID changes"
+      },
+      {
+            "id": "raised_roll_ff",
+            "label": "Raised roll Feedforward",
+            "category": "PID changes"
+      },
+      {
+            "id": "lowered_roll_ff",
+            "label": "Lowered roll Feedforward",
+            "category": "PID changes"
+      },
+      {
+            "id": "raised_pitch_ff",
+            "label": "Raised pitch Feedforward",
+            "category": "PID changes"
+      },
+      {
+            "id": "lowered_pitch_ff",
+            "label": "Lowered pitch Feedforward",
+            "category": "PID changes"
+      },
+      {
+            "id": "changed_yaw_p",
+            "label": "Changed yaw P",
+            "category": "PID changes"
+      },
+      {
+            "id": "changed_yaw_i",
+            "label": "Changed yaw I",
+            "category": "PID changes"
+      },
+      {
+            "id": "changed_yaw_ff",
+            "label": "Changed yaw Feedforward",
+            "category": "PID changes"
+      },
+      {
+            "id": "dynamic_notch_enabled",
+            "label": "Dynamic Notch enabled",
+            "category": "Filtering changes"
+      },
+      {
+            "id": "dynamic_notch_disabled",
+            "label": "Dynamic Notch disabled",
+            "category": "Filtering changes"
+      },
+      {
+            "id": "dynamic_notch_changed",
+            "label": "Dynamic Notch changed",
+            "category": "Filtering changes"
+      },
+      {
+            "id": "gyro_lowpass_changed",
+            "label": "Gyro lowpass changed",
+            "category": "Filtering changes"
+      },
+      {
+            "id": "dterm_lowpass_changed",
+            "label": "D-term lowpass changed",
+            "category": "Filtering changes"
+      },
+      {
+            "id": "notch_filter_added",
+            "label": "Notch filter added",
+            "category": "Filtering changes"
+      },
+      {
+            "id": "notch_filter_removed",
+            "label": "Notch filter removed",
+            "category": "Filtering changes"
+      },
+      {
+            "id": "rpm_filter_enabled",
+            "label": "RPM filter enabled",
+            "category": "Filtering changes"
+      },
+      {
+            "id": "rpm_filter_disabled",
+            "label": "RPM filter disabled",
+            "category": "Filtering changes"
+      },
+      {
+            "id": "rpm_filter_caused_issue",
+            "label": "RPM filter caused issue",
+            "category": "Filtering changes"
+      },
+      {
+            "id": "filter_sliders_changed",
+            "label": "Filter sliders changed",
+            "category": "Filtering changes"
+      },
+      {
+            "id": "raised_rates",
+            "label": "Raised rates",
+            "category": "Rates / feel changes"
+      },
+      {
+            "id": "lowered_rates",
+            "label": "Lowered rates",
+            "category": "Rates / feel changes"
+      },
+      {
+            "id": "changed_expo",
+            "label": "Changed expo",
+            "category": "Rates / feel changes"
+      },
+      {
+            "id": "changed_throttle_curve",
+            "label": "Changed throttle curve",
+            "category": "Rates / feel changes"
+      },
+      {
+            "id": "changed_throttle_midpoint",
+            "label": "Changed throttle midpoint",
+            "category": "Rates / feel changes"
+      },
+      {
+            "id": "changed_throttle_expo",
+            "label": "Changed throttle expo",
+            "category": "Rates / feel changes"
+      },
+      {
+            "id": "changed_motor_idle_dynamic_idle",
+            "label": "Changed motor idle / dynamic idle",
+            "category": "Rates / feel changes"
+      },
+      {
+            "id": "changed_props",
+            "label": "Changed props",
+            "category": "Hardware / setup changes"
+      },
+      {
+            "id": "same_props",
+            "label": "Same props",
+            "category": "Hardware / setup changes"
+      },
+      {
+            "id": "changed_battery",
+            "label": "Changed battery",
+            "category": "Hardware / setup changes"
+      },
+      {
+            "id": "same_battery_type",
+            "label": "Same battery type",
+            "category": "Hardware / setup changes"
+      },
+      {
+            "id": "added_gopro",
+            "label": "Added GoPro/action camera",
+            "category": "Hardware / setup changes"
+      },
+      {
+            "id": "removed_gopro",
+            "label": "Removed GoPro/action camera",
+            "category": "Hardware / setup changes"
+      },
+      {
+            "id": "tightened_frame_hardware",
+            "label": "Tightened frame/hardware",
+            "category": "Hardware / setup changes"
+      },
+      {
+            "id": "replaced_motor",
+            "label": "Replaced motor",
+            "category": "Hardware / setup changes"
+      },
+      {
+            "id": "replaced_esc",
+            "label": "Replaced ESC",
+            "category": "Hardware / setup changes"
+      },
+      {
+            "id": "changed_motor_timing",
+            "label": "Changed motor timing",
+            "category": "Hardware / setup changes"
+      },
+      {
+            "id": "changed_pwm_frequency",
+            "label": "Changed PWM frequency",
+            "category": "Hardware / setup changes"
+      },
+      {
+            "id": "changed_esc_firmware_settings",
+            "label": "Changed ESC firmware/settings",
+            "category": "Hardware / setup changes"
+      },
+      {
+            "id": "same_test_route",
+            "label": "Same test route",
+            "category": "Test condition changes"
+      },
+      {
+            "id": "different_test_route",
+            "label": "Different test route",
+            "category": "Test condition changes"
+      },
+      {
+            "id": "more_aggressive_flight",
+            "label": "More aggressive flight",
+            "category": "Test condition changes"
+      },
+      {
+            "id": "less_aggressive_flight",
+            "label": "Less aggressive flight",
+            "category": "Test condition changes"
+      },
+      {
+            "id": "wind_changed",
+            "label": "Wind changed",
+            "category": "Test condition changes"
+      },
+      {
+            "id": "crash_or_impact_happened",
+            "label": "Crash or impact happened",
+            "category": "Test condition changes"
+      },
+      {
+            "id": "motors_cool_after_test",
+            "label": "Motors were cool after test",
+            "category": "Test condition changes"
+      },
+      {
+            "id": "motors_warm_after_test",
+            "label": "Motors were warm after test",
+            "category": "Test condition changes"
+      },
+      {
+            "id": "motors_hot_after_test",
+            "label": "Motors were hot after test",
+            "category": "Test condition changes"
+      },
+      {
+            "id": "motors_holdable_after_test",
+            "label": "Motors were hot/warm but holdable",
+            "category": "After-flight result"
+      },
+      {
+            "id": "after_flight_flew_better",
+            "label": "After flight felt better",
+            "category": "After-flight result"
+      },
+      {
+            "id": "after_flight_locked_in",
+            "label": "After flight felt locked-in / controlled",
+            "category": "After-flight result"
+      },
+      {
+            "id": "keep_current_tune",
+            "label": "Use this as current best tune",
+            "category": "After-flight result"
+      },
+      {
+            "id": "after_flight_flew_worse",
+            "label": "After flight felt worse",
+            "category": "After-flight result"
+      },
+      {
+            "id": "low_throttle_hover_narrow",
+            "label": "Low-throttle hover band feels narrow",
+            "category": "After-flight result"
+      }
+];
+
+    function renderTuneChangeOptions(options = TUNE_CHANGE_OPTIONS) {
+      const mount = document.getElementById("tuneChangeOptions");
+      if (!mount) return;
+
+      const grouped = options.reduce((acc, item) => {
+        if (!acc[item.category]) acc[item.category] = [];
+        acc[item.category].push(item);
+        return acc;
+      }, {});
+
+      mount.innerHTML = Object.entries(grouped).map(([category, items]) => `
+        <div class="pilot-feel-category">
+          <div class="pilot-feel-category-title">${category}</div>
+          <div class="pilot-feel-options">
+            ${items.map(item => `
+              <label class="pilot-feel-option">
+                <input type="checkbox" name="tune_change_option" value="${item.id}" />
+                <span>${item.label}</span>
+              </label>
+            `).join("")}
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function setTuneChangePreset(values) {
+      const wanted = new Set(values);
+      document.querySelectorAll("input[name='tune_change_option']").forEach((box) => {
+        box.checked = wanted.has(box.value);
+      });
+    }
+
+    function appendTuneChangeContext(formData) {
+      document.querySelectorAll("input[name='tune_change_option']:checked").forEach((box) => {
+        formData.append("tune_change_option", box.value);
+      });
+      if (tuneChanges) {
+        formData.set("tune_changes", tuneChanges.value || "");
+      }
+      return formData;
+    }
+
+    renderTuneChangeOptions();
+
+    document.getElementById("tuneChangeClear")?.addEventListener("click", () => {
+      setTuneChangePreset([]);
+    });
+
+    document.getElementById("tuneChangeSameTestPreset")?.addEventListener("click", () => {
+      setTuneChangePreset(["same_props", "same_battery_type", "same_test_route", "motors_cool_after_test"]);
+    });
+
 
     function valueOrDash(value, suffix = "") {
       if (value === null || value === undefined || value === "") return "—";
@@ -972,9 +1578,30 @@
         return `${(axis.axis_name || axis.axis || "AXIS").toString().toUpperCase()}: ${dom}, error ratio ${valueOrDash(signal.error_ratio)}, ${lag}`;
       });
 
+      const pilotContext = analysis.pilot_feel_context || {};
+      const filteringAdvisor = analysis.filtering_advisor || {};
+      const pilotLabels = Array.isArray(pilotContext.selected_labels) && pilotContext.selected_labels.length
+        ? pilotContext.selected_labels
+        : ["No pilot feel options selected; log-only analysis used."];
+      const pilotOutputs = Array.isArray(pilotContext.option_outputs) && pilotContext.option_outputs.length
+        ? pilotContext.option_outputs.map(item => `${item.label}: ${item.action}`)
+        : ["No pilot-feel output actions were generated."];
+      const filterItems = [
+        filteringAdvisor.summary || "Dynamic Notch is AeroTune's default filtering path.",
+        `Default filter path: ${shortText(filteringAdvisor.default_filter_path || "dynamic_notch")}`,
+        `RPM filter policy: ${shortText(filteringAdvisor.rpm_filter_policy || "advanced_only")}`,
+        `Positive D allowed: ${filteringAdvisor.positive_d_allowed === false ? "no" : "yes"}`,
+      ];
+      const realPlan = Array.isArray(analysis.real_world_tuning_plan) && analysis.real_world_tuning_plan.length
+        ? analysis.real_world_tuning_plan.map(item => `${item.title}: ${item.action}`)
+        : ["Make one small change, retest, and save the next log for comparison."];
+
       usefulSummary.innerHTML = [
         box("Safe tuning stage", `<div class="big-read">${shortText(gate.workflow_stage || analysis.workflow_stage || "baseline_cleanup")}</div><div class="small" style="margin-top:8px;">${shortText(gate.message || "Clean baseline first; style tuning second.")}</div><div class="small" style="margin-top:8px;">Requested: ${shortText(analysis.requested_tuning_goal_label || analysis.requested_tuning_goal || "—")} → Active: ${shortText(analysis.effective_tuning_goal_label || analysis.effective_tuning_goal || "—")}</div>`, "full"),
         box("Main tune read", `<div class="big-read">${mainRead}</div><div class="small" style="margin-top:8px;">${shortText(analysis.summary || "")}</div>`, "full"),
+        box("Pilot feel input", `<ul class="summary-list">${pilotLabels.map(item => `<li>${shortText(item)}</li>`).join("")}</ul>`, "full"),
+        box("Pilot feel outputs", `<ul class="summary-list">${pilotOutputs.map(item => `<li>${shortText(item)}</li>`).join("")}</ul>`, "full"),
+        box("Filtering / D-term safety", `<ul class="summary-list">${filterItems.map(item => `<li>${shortText(item)}</li>`).join("")}</ul>`, "full"),
         box("Best first PID move", `<ul class="summary-list">${pidMoves.map(item => `<li>${item}</li>`).join("")}</ul>`),
         box("Data quality", `<ul class="summary-list">
           <li>${valueOrDash(report.usable_rows || data.rows)} usable rows</li>
@@ -984,6 +1611,7 @@
           <li>${data.converted ? "raw log converted before analysis" : "CSV analyzed directly"}</li>
         </ul>`),
         box("Signal / tracking clues", `<ul class="summary-list">${signalReads.map(item => `<li>${item}</li>`).join("")}</ul>`, "full"),
+        box("Real tuning plan", `<ul class="summary-list">${realPlan.slice(0, 6).map(item => `<li>${shortText(item)}</li>`).join("")}</ul>`, "full"),
         box("Cautions", `<ul class="summary-list">${cautionItems.map(item => `<li>${item}</li>`).join("")}</ul>`),
         box("Next test", `<ul class="summary-list">${nextItems.map(item => `<li>${item}</li>`).join("")}</ul>`),
       ].join("");
@@ -1106,6 +1734,26 @@
         return;
       }
 
+      const filteringAdvisor = data.analysis?.filtering_advisor;
+      if (filteringAdvisor) {
+        const filterCard = document.createElement("div");
+        filterCard.className = "axis-card";
+        const plan = Array.isArray(filteringAdvisor.plan) ? filteringAdvisor.plan.slice(0, 5) : [];
+        filterCard.innerHTML = `
+          <div class="axis-head">
+            <div class="axis-title">FILTERING / PILOT FEEL PLAN</div>
+            <span class="chip ${filteringAdvisor.positive_d_allowed === false ? "bad" : "good"}">${filteringAdvisor.default_filter_path || "dynamic_notch"}</span>
+          </div>
+          <div class="message ${filteringAdvisor.positive_d_allowed === false ? "bad" : "warn"}">
+            <b>${shortText(filteringAdvisor.summary || "Dynamic Notch default path")}</b><br>
+            RPM filter policy: ${shortText(filteringAdvisor.rpm_filter_policy || "advanced_only")}
+          </div>
+          <h3 style="margin-top:12px;">Real plan</h3>
+          <ul class="move-list">${plan.map(item => `<li><b>${shortText(item.title)}</b>: ${shortText(item.action)}</li>`).join("")}</ul>
+        `;
+        axisCards.appendChild(filterCard);
+      }
+
       axes.forEach(axisData => {
         const axisName = (axisData.axis_name || axisData.axis || axisData.name || "axis").toString().toUpperCase();
         const issueLabel = axisData.issue_label || axisData.issue || axisData.feel || axisData.status || "Review";
@@ -1222,11 +1870,209 @@
     });
 
 
+    function renderRawTrackingPairSelector(data) {
+      if (!rawTrackPairPanel) return;
+
+      const report = data.converter_report || {};
+      const pair = data.pair_recommendation || {};
+      const flights = Array.isArray(report.available_flights) ? report.available_flights : [];
+      rawTuneTrackingState = data;
+
+      if (!pair.can_pair_compare || flights.length < 2) {
+        rawTrackPairPanel.className = "message bad";
+        rawTrackPairPanel.textContent = pair.message || "This raw log did not contain at least two decoded flights.";
+        const rawTrackButton = document.getElementById("trackRawPairBtn");
+        const rawPairStatus = document.getElementById("rawTrackPairStatus");
+        if (rawTrackButton) rawTrackButton.disabled = true;
+        if (rawPairStatus) rawPairStatus.textContent = pair.message || "This raw log did not contain at least two decoded flights.";
+        return;
+      }
+
+      const beforeDefault = Number(pair.recommended_before_flight_index || Math.max(1, flights.length - 1));
+      const afterDefault = Number(pair.recommended_after_flight_index || flights.length);
+      const optionsHtml = (selectedIndex) => flights.map((flight) => {
+        const idx = Number(flight.flight_index);
+        const label = flight.label || `Flight ${idx}/${flight.flight_count || flights.length}`;
+        const sizeMb = flight.size_bytes ? ` · ${(Number(flight.size_bytes) / (1024 * 1024)).toFixed(2)} MB` : "";
+        return `<option value="${idx}" ${idx === Number(selectedIndex) ? "selected" : ""}>${shortText(label + sizeMb)}</option>`;
+      }).join("");
+
+      rawTrackPairPanel.className = "message good";
+      rawTrackPairPanel.innerHTML = `
+        <b>${shortText(pair.message || "Raw flights decoded.")}</b>
+        <div class="small" style="margin-top:8px;">Before should be the flight before recommendations/change. After should be the flight after your change. Fill Tune Change Details below, then use the Track Selected Raw Flights button at the bottom of that section.</div>
+
+        <label for="rawBeforeFlightSelect" style="margin-top:12px;">Before recommendations / baseline flight</label>
+        <select id="rawBeforeFlightSelect">${optionsHtml(beforeDefault)}</select>
+
+        <label for="rawAfterFlightSelect" style="margin-top:12px;">After change flight</label>
+        <select id="rawAfterFlightSelect">${optionsHtml(afterDefault)}</select>
+
+        <div class="pilot-feel-toolbar">
+          <button class="secondary" id="rawAutoLatestPair" type="button">Auto-select latest two flights</button>
+          <button class="secondary" id="rawSwapPair" type="button">Swap before/after</button>
+        </div>
+      `;
+
+      document.getElementById("rawAutoLatestPair")?.addEventListener("click", () => {
+        document.getElementById("rawBeforeFlightSelect").value = String(beforeDefault);
+        document.getElementById("rawAfterFlightSelect").value = String(afterDefault);
+      });
+
+      document.getElementById("rawSwapPair")?.addEventListener("click", () => {
+        const before = document.getElementById("rawBeforeFlightSelect");
+        const after = document.getElementById("rawAfterFlightSelect");
+        const oldBefore = before.value;
+        before.value = after.value;
+        after.value = oldBefore;
+      });
+
+      const rawTrackButton = document.getElementById("trackRawPairBtn");
+      const rawPairStatus = document.getElementById("rawTrackPairStatus");
+      if (rawTrackButton) {
+        rawTrackButton.disabled = false;
+        rawTrackButton.onclick = submitRawPairTracking;
+      }
+      if (rawPairStatus) {
+        rawPairStatus.textContent = "Ready. Enter tune-change details, then track the selected raw flights.";
+      }
+    }
+
+    async function submitRawPairTracking() {
+      if (!rawTuneTrackingState?.converter_report?.conversion_id) {
+        setMessage(trackStatus, "Decode a raw multi-flight log first.", "bad");
+        return;
+      }
+
+      const beforeSelect = document.getElementById("rawBeforeFlightSelect");
+      const afterSelect = document.getElementById("rawAfterFlightSelect");
+      const beforeIndex = Number(beforeSelect?.value || 0);
+      const afterIndex = Number(afterSelect?.value || 0);
+
+      if (!beforeIndex || !afterIndex) {
+        setMessage(trackStatus, "Choose both before and after flights.", "bad");
+        return;
+      }
+      if (beforeIndex === afterIndex) {
+        setMessage(trackStatus, "Before and after cannot be the same flight.", "bad");
+        return;
+      }
+
+      const button = document.getElementById("trackRawPairBtn");
+      const status = document.getElementById("rawTrackPairStatus");
+      const formData = new FormData();
+      formData.set("conversion_id", rawTuneTrackingState.converter_report.conversion_id);
+      formData.set("before_flight_index", String(beforeIndex));
+      formData.set("after_flight_index", String(afterIndex));
+      formData.set("drone_size", document.getElementById("droneSize").value);
+      formData.set("tuning_goal", document.getElementById("tuningGoal").value);
+      appendTuneChangeContext(formData);
+
+      if (button) button.disabled = true;
+      setMessage(trackStatus, `Tracking Flight ${beforeIndex} → Flight ${afterIndex}...`, "warn");
+      setMessage(trackingResult, "Raw flight-pair tune tracking running...", "warn");
+      if (status) status.textContent = "Comparing selected raw flights...";
+      if (trackingPanel) trackingPanel.innerHTML = "";
+
+      try {
+        const response = await fetch("/track-converted-flight-pair", { method: "POST", body: formData });
+        const data = await readJsonResponse(response);
+
+        if (!response.ok) {
+          setMessage(trackStatus, data.error || "Raw flight-pair tracking failed.", "bad");
+          setMessage(trackingResult, data.error || "Raw flight-pair tracking failed.", "bad");
+          if (trackingMachineOutput) trackingMachineOutput.textContent = JSON.stringify(data, null, 2);
+          if (status) status.textContent = data.error || "Tracking failed.";
+          return;
+        }
+
+        setMessage(trackStatus, data.report?.report_id ? `Raw flight-pair tracking complete. Saved report ${data.report.report_id}.` : "Raw flight-pair tracking complete.", "good");
+        if (status) status.textContent = "Selected raw flights compared.";
+        renderTrackingReport(data);
+      } catch (error) {
+        setMessage(trackStatus, error.message || String(error), "bad");
+        setMessage(trackingResult, error.message || String(error), "bad");
+        if (status) status.textContent = error.message || String(error);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+
+    rawTrackPrepareForm?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const formData = new FormData(rawTrackPrepareForm);
+      rawTuneTrackingState = null;
+      rawTrackPrepareBtn.disabled = true;
+      const rawTrackButton = document.getElementById("trackRawPairBtn");
+      const rawPairStatus = document.getElementById("rawTrackPairStatus");
+      if (rawTrackButton) rawTrackButton.disabled = true;
+      if (rawPairStatus) rawPairStatus.textContent = "Decoding raw Blackbox flights...";
+      setMessage(trackStatus, "Decoding raw multi-flight log...", "warn");
+      if (rawTrackPairPanel) {
+        rawTrackPairPanel.className = "message warn";
+        rawTrackPairPanel.textContent = "Decoding raw Blackbox flights...";
+      }
+
+      try {
+        const response = await fetch("/prepare-tune-tracking-raw", { method: "POST", body: formData });
+        const data = await readJsonResponse(response);
+
+        if (!response.ok) {
+          setMessage(trackStatus, data.error || "Raw tune tracking prepare failed.", "bad");
+          if (rawTrackPairPanel) {
+            rawTrackPairPanel.className = "message bad";
+            rawTrackPairPanel.textContent = data.error || "Raw tune tracking prepare failed.";
+          }
+          if (rawPairStatus) rawPairStatus.textContent = data.error || "Raw tune tracking prepare failed.";
+          if (trackingMachineOutput) trackingMachineOutput.textContent = JSON.stringify(data, null, 2);
+          return;
+        }
+
+        setMessage(trackStatus, data.message || "Raw flights decoded. Choose before/after flights, fill Tune Change Details, then track selected raw flights.", data.ok ? "good" : "warn");
+        renderRawTrackingPairSelector(data);
+        const tuneDetailsBlock = document.getElementById("tuneChangeDetailsBlock");
+        requestAnimationFrame(() => {
+          tuneDetailsBlock?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+        if (trackingMachineOutput) trackingMachineOutput.textContent = JSON.stringify(data, null, 2);
+      } catch (error) {
+        setMessage(trackStatus, error.message || String(error), "bad");
+        if (rawTrackPairPanel) {
+          rawTrackPairPanel.className = "message bad";
+          rawTrackPairPanel.textContent = error.message || String(error);
+        }
+        if (rawPairStatus) rawPairStatus.textContent = error.message || String(error);
+      } finally {
+        rawTrackPrepareBtn.disabled = false;
+      }
+    });
+
+
     function trackingScoreClass(score) {
       const num = Number(score || 0);
       if (num >= 8) return "good";
       if (num <= -8) return "bad";
       return "warn";
+    }
+
+    function softSignalText(text) {
+      return String(text || "")
+        .replace(/propwash_ratio/g, "propwash-like recovery ratio")
+        .replace(/propwash-band/gi, "propwash-like recovery-band")
+        .replace(/\bpropwash\b/gi, "propwash-like recovery");
+    }
+
+    function trackingDecisionLabel(decision) {
+      const labels = {
+        keep_current_tune_validate: "keep current tune / validate",
+        keep_and_confirm: "keep and confirm",
+        keep_but_continue_baseline_cleanup: "keep, keep cleaning baseline",
+        reduce_or_revert: "reduce or revert",
+        inconclusive_retest: "inconclusive / retest",
+        review_manually: "review manually"
+      };
+      return labels[decision] || String(decision || "review").replace(/_/g, " ");
     }
 
     function renderTrackingReport(data) {
@@ -1246,10 +2092,13 @@
       const metrics = report.metric_groups || {};
       const baseline = report.baseline_status || {};
       const changeNotes = report.change_notes || {};
+      const changeOptions = report.change_options || changeNotes.structured_options || {};
+      const pairSelection = report.pair_selection || data.pair_selection || {};
+      const pilotContext = report.pilot_context || {};
       const pidTerms = changeNotes.pid_terms || {};
       const axisVerdicts = report.axis_verdicts || {};
 
-      setMessage(trackingResult, report.summary || "Tune-change tracking complete.", scoreClass);
+      setMessage(trackingResult, softSignalText(report.summary || "Tune-change tracking complete."), scoreClass);
 
       const pidRows = ["p", "i", "d", "ff"].map(term => {
         const item = pidTerms[term] || {};
@@ -1258,19 +2107,37 @@
       }).join("");
 
       const axisRows = Object.entries(axisVerdicts).map(([axis, item]) => `
-        <li>${axis.toUpperCase()}: ${item.verdict || "unknown"} (${valueOrDash(item.score_pct, "%")}) — ${item.read || ""}</li>
+        <li>${axis.toUpperCase()}: ${item.verdict || "unknown"} (${valueOrDash(item.score_pct, "%")}) — ${softSignalText(item.read || "")}</li>
       `).join("");
 
-      const warnings = (report.warnings || []).map(item => `<li>${shortText(item)}</li>`).join("") || "<li>No special warnings returned.</li>";
-      const remaining = (baseline.remaining_after_issues || []).map(item => `<li>${shortText(item)}</li>`).join("") || "<li>No remaining baseline issues reported.</li>";
+      const warnings = (report.warnings || []).map(item => `<li>${shortText(softSignalText(item))}</li>`).join("") || "<li>No special warnings returned.</li>";
+      const remaining = (baseline.remaining_after_issues || []).map(item => `<li>${shortText(softSignalText(item))}</li>`).join("") || "<li>No remaining baseline issues reported.</li>";
+      const pilotNotes = Array.isArray(pilotContext.notes) && pilotContext.notes.length
+        ? pilotContext.notes.map(item => `<li>${shortText(item)}</li>`).join("")
+        : "<li>No strong pilot-feel outcome recorded.</li>";
+      const pilotReadClass = pilotContext.motor_temp_hot ? "bad" : pilotContext.positive_flight_feel ? "good" : "warn";
+      const selectedChangeOptions = Array.isArray(changeOptions.selected_labels) && changeOptions.selected_labels.length
+        ? changeOptions.selected_labels.map(item => `<li>${shortText(item)}</li>`).join("")
+        : "<li>No structured change options selected.</li>";
+      const pairRead = pairSelection && pairSelection.mode === "single_raw_multi_flight_pair"
+        ? `${shortText(pairSelection.before_flight_label)} → ${shortText(pairSelection.after_flight_label)}`
+        : "Two uploaded logs";
 
       trackingPanel.innerHTML = `
         <div class="comparison-headline">
           <b>Decision</b>
-          <div class="verdict score ${scoreClass}">${shortText(report.decision || "review")}</div>
+          <div class="verdict score ${scoreClass}">${shortText(trackingDecisionLabel(report.decision))}</div>
           <div class="small" style="margin-top:8px;">Changed helped: ${changedHelped} · Score: ${score.toFixed(2)}% · Confidence: ${valueOrDash(report.confidence)}</div>
         </div>
 
+        <div class="axis-compare-card">
+          <div class="axis-head">
+            <div class="axis-title">Pilot + Data Read</div>
+            <span class="chip ${pilotReadClass}">${pilotContext.positive_flight_feel ? "pilot feel positive" : "validate"}</span>
+          </div>
+          <div class="message ${pilotReadClass}">${shortText(softSignalText(report.summary || "Review the data and pilot feel together."))}</div>
+          <ul class="summary-list">${pilotNotes}</ul>
+        </div>
 
         ${savedReport.report_id ? `
         <div class="axis-compare-card">
@@ -1294,7 +2161,7 @@
           <div class="compare-metrics">
             <div class="compare-metric"><b>Noise</b>${valueOrDash(metrics.noise_improvement_pct, "%")}</div>
             <div class="compare-metric"><b>Tracking</b>${valueOrDash(metrics.tracking_improvement_pct, "%")}</div>
-            <div class="compare-metric"><b>Propwash</b>${valueOrDash(metrics.propwash_improvement_pct, "%")}</div>
+            <div class="compare-metric"><b>Propwash-like recovery</b>${valueOrDash(metrics.propwash_improvement_pct, "%")}</div>
             <div class="compare-metric"><b>Style allowed?</b>${baseline.style_tuning_allowed ? "Yes" : "No"}</div>
           </div>
         </div>
@@ -1304,7 +2171,22 @@
             <div class="axis-title">Recorded Tune Change</div>
           </div>
           <ul class="summary-list">${pidRows}</ul>
-          <div class="small" style="margin-top:8px;">${shortText(changeNotes.raw_notes || "No notes entered.")}</div>
+          <div class="small" style="margin-top:8px;">${shortText(changeNotes.raw_notes || "No extra notes entered.")}</div>
+        </div>
+
+        <div class="axis-compare-card">
+          <div class="axis-head">
+            <div class="axis-title">Structured Change Options</div>
+          </div>
+          <ul class="summary-list">${selectedChangeOptions}</ul>
+          <div class="small" style="margin-top:8px;">${shortText(changeOptions.summary || "Checkbox options are context only; they do not stack PID deltas.")}</div>
+        </div>
+
+        <div class="axis-compare-card">
+          <div class="axis-head">
+            <div class="axis-title">Compared Flights</div>
+          </div>
+          <div class="message">${pairRead}</div>
         </div>
 
         <div class="axis-compare-card">
@@ -1318,7 +2200,7 @@
           <div class="axis-head">
             <div class="axis-title">Safe Baseline Status</div>
           </div>
-          <div class="message ${baseline.style_tuning_allowed ? "good" : "warn"}">${shortText(baseline.style_guidance || "")}</div>
+          <div class="message ${baseline.style_tuning_allowed ? "good" : "warn"}">${shortText(softSignalText(baseline.style_guidance || ""))}</div>
           <ul class="summary-list">${remaining}</ul>
         </div>
 
@@ -1333,7 +2215,7 @@
           <div class="axis-head">
             <div class="axis-title">Next Step</div>
           </div>
-          <div class="message">${shortText(report.next_step || "Retest with the same flight route.")}</div>
+          <div class="message">${shortText(softSignalText(report.next_step || "Retest with the same flight route."))}</div>
         </div>
       `;
     }
@@ -1372,14 +2254,15 @@
     });
 
 
-    trackForm.addEventListener("submit", async (event) => {
+    trackForm?.addEventListener("submit", async (event) => {
       event.preventDefault();
 
       const formData = new FormData(trackForm);
       formData.set("drone_size", document.getElementById("droneSize").value);
       formData.set("tuning_goal", document.getElementById("tuningGoal").value);
+      appendTuneChangeContext(formData);
 
-      trackBtn.disabled = true;
+      if (trackBtn) trackBtn.disabled = true;
       setMessage(trackStatus, "Tracking tune change...", "warn");
       setMessage(trackingResult, "Tune-change tracking running...", "warn");
       if (trackingPanel) trackingPanel.innerHTML = "";
@@ -1401,7 +2284,7 @@
         setMessage(trackStatus, error.message || String(error), "bad");
         setMessage(trackingResult, error.message || String(error), "bad");
       } finally {
-        trackBtn.disabled = false;
+        if (trackBtn) trackBtn.disabled = false;
       }
     });
 

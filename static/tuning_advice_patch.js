@@ -26,6 +26,20 @@ AeroTune frontend tuning-advice renderer.
     return "0%";
   }
 
+  function adviceStatusLine(advice) {
+    const gate = advice && advice.filtering_gate ? advice.filtering_gate : null;
+    if (gate && gate.baseline_hold_bypassed_by_symptoms) {
+      return `<div style="margin:12px 0;padding:10px 12px;border-radius:12px;background:rgba(255,210,120,.12);border:1px solid rgba(255,210,120,.25);line-height:1.4;"><strong>Baseline hold bypassed:</strong> you selected a good-baseline option, but also selected active symptoms. AeroTune is using those symptoms plus the log instead of forcing all PID deltas to 0%.</div>`;
+    }
+    if (advice && advice.baseline_hold_active) {
+      return `<div style="margin:12px 0;padding:10px 12px;border-radius:12px;background:rgba(120,255,180,.12);border:1px solid rgba(120,255,180,.25);line-height:1.4;"><strong>Baseline hold active:</strong> AeroTune is keeping PID deltas at 0% because the pilot marked this as a good/cool baseline flight.</div>`;
+    }
+    if (gate && gate.log_pilot_disagreement) {
+      return `<div style="margin:12px 0;padding:10px 12px;border-radius:12px;background:rgba(255,210,120,.12);border:1px solid rgba(255,210,120,.25);line-height:1.4;"><strong>Pilot/log disagreement:</strong> log metrics showed correction evidence, but pilot feel says hold. Retest before changing PIDs.</div>`;
+    }
+    return "";
+  }
+
   function pidInputId(axis, field) {
     return `pid-${axis}-${field}`;
   }
@@ -305,6 +319,7 @@ AeroTune frontend tuning-advice renderer.
         </div>
 
         <p style="margin:12px 0 8px;line-height:1.45;">${advice.summary || "No tuning advice summary available."}</p>
+        ${adviceStatusLine(advice)}
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;">
           <span style="padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.1);">Mode: ${advice.mode || "delta_percent"}</span>

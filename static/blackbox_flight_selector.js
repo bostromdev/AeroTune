@@ -47,6 +47,44 @@ uploading the raw log again.
     return el && el.value ? el.value : "efficient";
   }
 
+  function requestUrl(args) {
+    const input = args && args.length ? args[0] : "";
+    if (typeof input === "string") return input;
+    if (input && typeof input.url === "string") return input.url;
+    return "";
+  }
+
+  function shouldRenderAnalyzerFlightSelector(url, json) {
+    const path = String(url || "");
+
+    // Tune-change tracking has its own before/after raw-flight selector inside
+    // the V1.9 card. Do not let the global analyzer raw-flight selector steal
+    // focus or scroll the user back up to the Analyzer Controls area.
+    if (
+      path.includes("/prepare-tune-tracking-raw") ||
+      path.includes("/track-converted-flight-pair") ||
+      path.includes("/track-tune-change") ||
+      json?.pair_recommendation ||
+      json?.tune_tracking
+    ) {
+      return false;
+    }
+
+    // This helper exists for normal Analyzer raw-log uploads and selected-flight
+    // re-analysis only.
+    return path.includes("/upload-log") || path.includes("/analyze-converted-flight");
+  }
+
+  // AEROTUNE V1.8 PILOT-FEEL BRIDGE:
+  // When a raw .BBL contains multiple flights, the user can switch flights after
+  // upload. This keeps the selected pilot-feel checkboxes attached to the new
+  // analysis instead of falling back to log-only tuning.
+  function currentPilotFeelValues() {
+    return Array.from(document.querySelectorAll("input[name='pilot_feel']:checked"))
+      .map((item) => item.value)
+      .filter(Boolean);
+  }
+
   function findMount() {
     return (
       document.querySelector("#aerotune-tuning-advice-card") ||
@@ -189,6 +227,7 @@ uploading the raw log again.
         body.append("flight_index", String(selected));
         body.append("drone_size", currentDroneSize());
         body.append("tuning_goal", currentTuningGoal());
+        currentPilotFeelValues().forEach((value) => body.append("pilot_feel", value));
 
         button.disabled = true;
         button.textContent = "Analyzing selected flight...";
@@ -227,13 +266,17 @@ uploading the raw log again.
 
   const originalFetch = window.fetch;
   window.fetch = async function () {
-    const response = await originalFetch.apply(this, arguments);
+    const args = arguments;
+    const url = requestUrl(args);
+    const response = await originalFetch.apply(this, args);
 
     try {
       const clone = response.clone();
       const contentType = clone.headers.get("content-type") || "";
       if (contentType.includes("application/json")) {
         clone.json().then((json) => {
+          if (!shouldRenderAnalyzerFlightSelector(url, json)) return;
+
           const report = getConverterReport(json);
           if (hasMultiFlight(report)) {
             window.__AEROTUNE_LAST_RAW_FLIGHT_REPORT__ = report;

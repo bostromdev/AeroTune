@@ -4,8 +4,10 @@
 from __future__ import annotations
 try:
     from app.tuning_advisor import attach_tuning_advice
+    from app.pilot_feel import apply_pilot_feel_to_analysis
 except Exception:
     from .tuning_advisor import attach_tuning_advice
+    from .pilot_feel import apply_pilot_feel_to_analysis
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
@@ -178,6 +180,10 @@ DRONE_SIZE_ALIASES = {
     "5.0": "5",
     "5inch": "5",
     "5in": "5",
+    "6": "6",
+    "6.0": "6",
+    "6inch": "6",
+    "6in": "6",
     "7": "7",
     "7.0": "7",
     "7inch": "7",
@@ -959,7 +965,20 @@ def _workflow_summary(axes: Dict[str, Dict[str, Any]], gate: Dict[str, Any]) -> 
         return "Clean baseline detected. Optional small P/FF decrease may be used for smoother cinematic feel."
     return "Clean baseline detected. No PID change needed for Efficient/Smooth."
 
-def _detect_oscillation_core(df: pd.DataFrame, drone_size: str = "7", tuning_goal: str = "efficient") -> Dict[str, Any]:
+def _detect_oscillation_core(
+    df: pd.DataFrame,
+    drone_size: str = "7",
+    tuning_goal: str = "efficient",
+    pilot_feel: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    Code label: SIGNAL ANALYSIS ENGINE.
+
+    This function reads the Blackbox dataframe and creates the data-only tune
+    evidence: size profile, frequency bands, gyro/setpoint tracking, and
+    conservative PID deltas. Pilot feel is accepted here for API compatibility,
+    but the human-context merge happens later in apply_pilot_feel_to_analysis().
+    """
     goal = normalize_goal(tuning_goal)
     requested_goal = goal
 
@@ -1191,23 +1210,35 @@ def _detect_oscillation_core(df: pd.DataFrame, drone_size: str = "7", tuning_goa
 
 def detect_oscillation(*args, **kwargs):
     """
-    Compatibility wrapper added by AeroTune tuning advisor patch.
+    Code label: ANALYZER ORCHESTRATOR.
 
-    It runs the original analyzer, then attaches conservative Betaflight
-    PID delta suggestions based on gyro/setpoint behavior.
+    This wrapper is the handoff point between the engines:
+    1. _detect_oscillation_core() = data-only signal analysis.
+    2. apply_pilot_feel_to_analysis() = human feel + filtering safety plan.
+    3. attach_tuning_advice() = Betaflight-style PID delta notes.
+
+    Keeping those jobs separated makes the code easier to review and prevents
+    the upload route from becoming the engine of the app.
     """
     analysis = _detect_oscillation_core(*args, **kwargs)
 
     df = args[0] if args else kwargs.get("df")
     drone_size = kwargs.get("drone_size", "5")
     tuning_goal = kwargs.get("tuning_goal", kwargs.get("goal", "balanced"))
+    pilot_feel = kwargs.get("pilot_feel", [])
 
     try:
+        analysis = apply_pilot_feel_to_analysis(
+            analysis=analysis,
+            pilot_feel=pilot_feel,
+            drone_size=str(drone_size),
+        )
         return attach_tuning_advice(
             analysis=analysis,
             df=df,
             drone_size=str(drone_size),
             tuning_goal=str(tuning_goal),
+            pilot_feel=pilot_feel,
         )
     except Exception as exc:
         if isinstance(analysis, dict):

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import numpy as np
 from fastapi import FastAPI, File, Form, UploadFile
@@ -20,9 +20,17 @@ from app.analyzer import (
 from app.comparison import ComparisonError, build_multilog_comparison
 from app.tune_tracking import TuneTrackingError, build_tune_change_tracking
 from app.report_store import ReportStoreError, get_tune_change_report_path, save_tune_change_report
-from app.converter import ConverterError, SUPPORTED_UPLOAD_EXTENSIONS, get_converted_flight_path, prepare_analysis_file
+from app.converter import (
+    ConverterError,
+    RAW_BLACKBOX_EXTENSIONS,
+    SUPPORTED_UPLOAD_EXTENSIONS,
+    get_converted_flight_path,
+    prepare_analysis_file,
+)
 from app.log_validator import validate_log
 from app.parser import optimize_csv_file_with_report, parse_log_with_report
+from app.pilot_feel import get_pilot_feel_options
+from app.tune_change_options import get_tune_change_options
 
 
 app = FastAPI(title="AeroTune")
@@ -141,6 +149,60 @@ def save_optimized_dataframe(df, filename: str) -> Path:
     return path
 
 
+def _coerce_flight_index(value, fallback: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return int(fallback)
+
+
+def _recommended_latest_pair(converter_report: dict) -> dict:
+    """
+    Code label: BEFORE/AFTER FLIGHT RESOLVER.
+
+    For one raw Blackbox file with multiple flights, Flight 1/N is oldest and
+    Flight N/N is newest. Tune tracking defaults to the latest two flights:
+    before = N-1/N, after = N/N. The UI can override both values.
+    """
+    flights = converter_report.get("available_flights") or []
+    flight_count = int(converter_report.get("flight_count") or len(flights) or 0)
+    if flight_count < 2:
+        return {
+            "can_pair_compare": False,
+            "flight_count": flight_count,
+            "recommended_before_flight_index": None,
+            "recommended_after_flight_index": None,
+            "message": "Only one flight was found. Upload separate before/after logs or use a raw log with at least two flights.",
+        }
+    return {
+        "can_pair_compare": True,
+        "flight_count": flight_count,
+        "recommended_before_flight_index": flight_count - 1,
+        "recommended_after_flight_index": flight_count,
+        "message": f"AeroTune recommends Flight {flight_count - 1}/{flight_count} as before and Flight {flight_count}/{flight_count} as after. You can change either selector before comparing.",
+    }
+
+
+def _build_pair_selection(converter_report: dict, before_index: int, after_index: int) -> dict:
+    flight_count = int(converter_report.get("flight_count") or 0)
+    warnings = []
+    if before_index == after_index:
+        warnings.append("Before and after selected the same flight; comparison is not valid.")
+    if flight_count and before_index > after_index:
+        warnings.append("Before flight index is newer than after flight index. This may be intentional, but normal workflow is older flight as before and newer flight as after.")
+    return {
+        "mode": "single_raw_multi_flight_pair",
+        "conversion_id": converter_report.get("conversion_id"),
+        "flight_count": flight_count,
+        "before_flight_index": before_index,
+        "after_flight_index": after_index,
+        "before_flight_label": f"Flight {before_index}/{flight_count}" if flight_count else f"Flight {before_index}",
+        "after_flight_label": f"Flight {after_index}/{flight_count}" if flight_count else f"Flight {after_index}",
+        "same_flight_selected": before_index == after_index,
+        "warnings": warnings,
+    }
+
+
 def build_plot_payload(df):
     if "time" not in df.columns or "gyro_x" not in df.columns:
         raise ValueError("Plot data requires time and gyro_x.")
@@ -220,6 +282,29 @@ def normalize_drone_size(value):
     return raw
 
 
+@app.get("/api/pilot-feel-options")
+def pilot_feel_options():
+    """
+    AEROTUNE V1.8 PILOT-FEEL OPTIONS ENDPOINT.
+
+    Role: gives the UI the stable checkbox catalog without hard-coding future
+    backend-only options. The static HTML also contains a matching fallback list
+    so the site still renders if this endpoint is unavailable.
+    """
+    return {"options": get_pilot_feel_options()}
+
+
+@app.get("/api/tune-change-options")
+def tune_change_options():
+    """
+    AEROTUNE V1.9 TUNE-CHANGE OPTIONS ENDPOINT.
+
+    Role: provides the structured checklist for tune-change tracking. These
+    options are comparison context; they do not stack into direct PID deltas.
+    """
+    return {"options": get_tune_change_options()}
+
+
 @app.get("/", response_class=HTMLResponse)
 def home():
     try:
@@ -234,6 +319,7 @@ async def upload_log(
     file: UploadFile = File(...),
     drone_size: str = Form("7"),
     tuning_goal: str = Form("efficient"),
+    pilot_feel: Optional[List[str]] = Form(None),
 ):
     global LAST_FILE_PATH, LAST_SOURCE_FILE_PATH, LAST_OPTIMIZED_PATH, LAST_OPTIMIZED_CSV, LAST_OPTIMIZED_NAME
 
@@ -279,10 +365,14 @@ async def upload_log(
         LAST_OPTIMIZED_CSV = None
 
         validation = validate_log(df)
+        # AEROTUNE V1.8 PILOT-FEEL WIRING:
+        # Pass checkbox observations into the analyzer so the final plan uses
+        # both Blackbox data and the pilot's real flight feel.
         analysis = detect_oscillation(
             df,
             drone_size=size_key,
             tuning_goal=goal,
+            pilot_feel=pilot_feel or [],
         )
 
         return {
@@ -301,6 +391,7 @@ async def upload_log(
             "converter_report": converter_report,
             "parser_report": parsed.report,
             "validation": validation,
+            "pilot_feel": analysis.get("pilot_feel_context") if isinstance(analysis, dict) else None,
             "analysis": analysis,
         }
 
@@ -323,6 +414,7 @@ async def analyze_converted_flight(
     flight_index: int = Form(...),
     drone_size: str = Form("7"),
     tuning_goal: str = Form("efficient"),
+    pilot_feel: Optional[List[str]] = Form(None),
 ):
     """
     V1.7 raw Blackbox multi-flight selector endpoint.
@@ -367,10 +459,14 @@ async def analyze_converted_flight(
         LAST_OPTIMIZED_CSV = None
 
         validation = validate_log(df)
+        # AEROTUNE V1.8 PILOT-FEEL WIRING:
+        # Re-analysis of a selected raw flight keeps the same pilot-feel
+        # context instead of dropping it when the user changes Flight 1/N.
         analysis = detect_oscillation(
             df,
             drone_size=size_key,
             tuning_goal=goal,
+            pilot_feel=pilot_feel or [],
         )
 
         return {
@@ -393,6 +489,7 @@ async def analyze_converted_flight(
             "converter_report": converter_report,
             "parser_report": parsed.report,
             "validation": validation,
+            "pilot_feel": analysis.get("pilot_feel_context") if isinstance(analysis, dict) else None,
             "analysis": analysis,
         }
 
@@ -462,6 +559,195 @@ async def optimize_log(file: UploadFile = File(...)):
             file.file.close()
         except Exception:
             pass
+
+
+@app.post("/prepare-tune-tracking-raw")
+async def prepare_tune_tracking_raw(raw_file: UploadFile = File(...)):
+    """
+    Code label: RAW BLACKBOX FLIGHT PAIR PREPARER.
+
+    Upload one raw .BBL/.BFL/.TXT that contains multiple flights. AeroTune decodes
+    it once, returns all Flight 1/N options, and recommends the latest two flights
+    as before/after while still letting the user override them.
+    """
+    try:
+        if not raw_file.filename:
+            return error_response("Raw Blackbox log is missing.", 400)
+
+        if Path(raw_file.filename).suffix.lower() not in RAW_BLACKBOX_EXTENSIONS:
+            return error_response(
+                "Single-file tune tracking requires a raw .BBL, .BFL, or .TXT Blackbox log with multiple flights. Use the two-log tracker for CSV files.",
+                400,
+            )
+
+        saved_path = save_upload(raw_file)
+
+        try:
+            analysis_path, converter_report = prepare_analysis_file(saved_path)
+        except ConverterError as exc:
+            return error_response(str(exc), 400, converter_report=exc.report)
+
+        pair = _recommended_latest_pair(converter_report)
+        return {
+            "ok": bool(pair.get("can_pair_compare")),
+            "version": "V1.9",
+            "message": pair.get("message"),
+            "source_filename": saved_path.name,
+            "analysis_filename": analysis_path.name,
+            "converter_report": converter_report,
+            "pair_recommendation": pair,
+        }
+
+    except ValueError as exc:
+        return error_response(str(exc), 400)
+
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+    finally:
+        try:
+            raw_file.file.close()
+        except Exception:
+            pass
+
+
+@app.post("/track-converted-flight-pair")
+async def track_converted_flight_pair(
+    conversion_id: str = Form(...),
+    before_flight_index: int = Form(...),
+    after_flight_index: int = Form(...),
+    drone_size: str = Form("7"),
+    tuning_goal: str = Form("efficient"),
+    tune_changes: str = Form(""),
+    tune_change_option: Optional[List[str]] = Form(None),
+):
+    """
+    Code label: PAIR COMPARISON ORCHESTRATOR.
+
+    Compares two selected flights from the same decoded raw Blackbox log. Default
+    UI behavior is latest two flights, but the pilot can pick any before/after
+    pair as long as they are not the same flight.
+    """
+    try:
+        size_key = normalize_drone_size(drone_size)
+        if size_key is None or size_key not in ALLOWED_DRONE_SIZES:
+            return error_response(
+                "Invalid drone size. Use 3, 3.5, 4, 5, 6, or 7.",
+                400,
+                allowed_drone_sizes=sorted(ALLOWED_DRONE_SIZES, key=float),
+            )
+
+        goal = normalize_goal(tuning_goal)
+
+        before_index = _coerce_flight_index(before_flight_index, 1)
+        after_index = _coerce_flight_index(after_flight_index, before_index + 1)
+        if before_index == after_index:
+            return error_response("Before and after cannot be the same decoded flight.", 400)
+
+        try:
+            before_analysis_path, before_converter_report = get_converted_flight_path(conversion_id, before_index)
+            after_analysis_path, after_converter_report = get_converted_flight_path(conversion_id, after_index)
+        except ConverterError as exc:
+            return error_response(str(exc), 400, converter_report=exc.report)
+
+        before_parsed = parse_log_with_report(before_analysis_path)
+        if before_parsed.df is None or before_parsed.df.empty:
+            return error_response(
+                before_parsed.report.get("message", "Could not parse selected before flight."),
+                400,
+                before={"converter_report": before_converter_report, "parser_report": before_parsed.report},
+            )
+
+        after_parsed = parse_log_with_report(after_analysis_path)
+        if after_parsed.df is None or after_parsed.df.empty:
+            return error_response(
+                after_parsed.report.get("message", "Could not parse selected after flight."),
+                400,
+                before={"converter_report": before_converter_report, "parser_report": before_parsed.report},
+                after={"converter_report": after_converter_report, "parser_report": after_parsed.report},
+            )
+
+        before_df = before_parsed.df
+        after_df = after_parsed.df
+        before_validation = validate_log(before_df)
+        after_validation = validate_log(after_df)
+        before_analysis = detect_oscillation(before_df, drone_size=size_key, tuning_goal=goal)
+        after_analysis = detect_oscillation(after_df, drone_size=size_key, tuning_goal=goal)
+
+        comparison = build_multilog_comparison(
+            before_df=before_df,
+            after_df=after_df,
+            before_analysis=before_analysis,
+            after_analysis=after_analysis,
+            drone_size=size_key,
+            tuning_goal=goal,
+        )
+
+        pair_selection = _build_pair_selection(after_converter_report, before_index, after_index)
+        tune_tracking = build_tune_change_tracking(
+            tune_changes=tune_changes,
+            tune_change_options=tune_change_option or [],
+            before_analysis=before_analysis,
+            after_analysis=after_analysis,
+            comparison=comparison,
+            pair_selection=pair_selection,
+        )
+
+        result = {
+            "version": "V1.9",
+            "message": "Tune-change tracking complete for selected raw Blackbox flights.",
+            "input_mode": "single_raw_multi_flight_pair",
+            "drone_size": size_key,
+            "tuning_goal": goal,
+            "tune_changes": tune_changes,
+            "tune_change_options": tune_change_option or [],
+            "pair_selection": pair_selection,
+            "before": {
+                "source_filename": before_analysis_path.name,
+                "source_file_type": before_analysis_path.suffix.lower(),
+                "analysis_filename": before_analysis_path.name,
+                "converted": True,
+                "flight_index": before_index,
+                "rows": int(len(before_df)),
+                "columns": list(before_df.columns),
+                "converter_report": before_converter_report,
+                "parser_report": before_parsed.report,
+                "validation": before_validation,
+                "analysis": before_analysis,
+            },
+            "after": {
+                "source_filename": after_analysis_path.name,
+                "source_file_type": after_analysis_path.suffix.lower(),
+                "analysis_filename": after_analysis_path.name,
+                "converted": True,
+                "flight_index": after_index,
+                "rows": int(len(after_df)),
+                "columns": list(after_df.columns),
+                "converter_report": after_converter_report,
+                "parser_report": after_parsed.report,
+                "validation": after_validation,
+                "analysis": after_analysis,
+            },
+            "comparison": comparison,
+            "tune_tracking": tune_tracking,
+        }
+
+        try:
+            report_info = save_tune_change_report(result)
+        except ReportStoreError as exc:
+            return error_response(str(exc), 500)
+
+        result["report"] = report_info
+        return result
+
+    except (ComparisonError, TuneTrackingError) as exc:
+        return error_response(str(exc), 400)
+
+    except ValueError as exc:
+        return error_response(str(exc), 400)
+
+    except Exception as exc:
+        return error_response(str(exc), 500)
 
 
 @app.post("/compare-logs")
@@ -635,6 +921,7 @@ async def track_tune_change(
     drone_size: str = Form("7"),
     tuning_goal: str = Form("efficient"),
     tune_changes: str = Form(""),
+    tune_change_option: Optional[List[str]] = Form(None),
 ):
     # V1.5 tune-change tracking:
     # before log + after log + what changed -> did the change help or hurt?
@@ -702,9 +989,11 @@ async def track_tune_change(
 
         tune_tracking = build_tune_change_tracking(
             tune_changes=tune_changes,
+            tune_change_options=tune_change_option or [],
             before_analysis=before_analysis,
             after_analysis=after_analysis,
             comparison=comparison,
+            pair_selection={"mode": "two_uploaded_logs"},
         )
 
         result = {
@@ -713,6 +1002,7 @@ async def track_tune_change(
             "drone_size": size_key,
             "tuning_goal": goal,
             "tune_changes": tune_changes,
+            "tune_change_options": tune_change_option or [],
             "before": {
                 "source_filename": before_saved_path.name,
                 "source_file_type": before_saved_path.suffix.lower(),
