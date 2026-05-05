@@ -20,8 +20,21 @@ import math
 import numpy as np
 import pandas as pd
 
+try:
+    from app.pilot_feel import apply_pilot_feel_to_tuning_advice
+except Exception:
+    from .pilot_feel import apply_pilot_feel_to_tuning_advice
+
 
 AXES = ("roll", "pitch", "yaw")
+
+# Code label: SINGLE-PASS PID DELTA GOVERNOR
+# AeroTune recommendations are manual one-pass deltas. Even if future pilot-feel
+# or tune-tracking context adds more signals, no single report should stack into
+# giant PID jumps. 11% is treated as the absolute one-way cap for Betaflight
+# percent advice.
+MAX_SINGLE_PASS_DELTA_PERCENT = 11
+PID_DELTA_PERCENT_KEYS = ("p_percent", "i_percent", "d_percent", "dmax_percent", "ff_percent")
 
 
 GYRO_CANDIDATES = {
@@ -429,6 +442,7 @@ def _axis_recommendation(metrics: AxisMetrics, drone_size: str, axis: str) -> Di
     else:
         note = "D increase targets overshoot/bounceback; small P/FF reduction prevents snapping past target."
 
+    deltas = _clamp_delta_map(deltas)
     action = "adjust" if any(v != 0 for v in deltas.values()) else "hold"
 
     return {
@@ -450,6 +464,51 @@ def _axis_recommendation(metrics: AxisMetrics, drone_size: str, axis: str) -> Di
         },
         "notes": metrics.notes or [],
     }
+
+
+def _clamp_percent_delta(value: Any, cap: int = MAX_SINGLE_PASS_DELTA_PERCENT) -> int:
+    """Clamp one Betaflight percent delta to AeroTune's safe one-pass limit."""
+    try:
+        number = int(round(float(value)))
+    except (TypeError, ValueError):
+        return 0
+    return int(np.clip(number, -abs(cap), abs(cap)))
+
+
+def _clamp_delta_map(deltas: Dict[str, Any], cap: int = MAX_SINGLE_PASS_DELTA_PERCENT) -> Dict[str, int]:
+    """
+    Code label: PID DELTA STACKING GUARD.
+
+    Every axis recommendation passes through this guard. This protects AeroTune
+    from ever outputting +20%, +50%, or +100% because multiple symptoms were
+    selected. Pilot-feel checkboxes can change gates and explanations, but the
+    final PID percentages remain capped per pass.
+    """
+    clean = {key: 0 for key in PID_DELTA_PERCENT_KEYS}
+    if isinstance(deltas, dict):
+        for key in PID_DELTA_PERCENT_KEYS:
+            clean[key] = _clamp_percent_delta(deltas.get(key, 0), cap=cap)
+    return clean
+
+
+def _clamp_advice_axis_deltas(advice: Dict[str, Any], reason: str | None = None) -> None:
+    """Apply the one-pass cap to an already-built advice payload."""
+    axes = advice.get("axes")
+    if not isinstance(axes, dict):
+        return
+    for axis in axes.values():
+        if not isinstance(axis, dict):
+            continue
+        deltas = axis.get("deltas")
+        if not isinstance(deltas, dict):
+            continue
+        clamped = _clamp_delta_map(deltas)
+        if clamped != deltas:
+            axis["pre_cap_deltas"] = dict(deltas)
+            axis["deltas"] = clamped
+            notes = axis.setdefault("notes", [])
+            if isinstance(notes, list):
+                notes.append(reason or f"AeroTune capped this axis to ±{MAX_SINGLE_PASS_DELTA_PERCENT}% for one safe test pass.")
 
 
 def _format_delta(value: int) -> str:
@@ -494,9 +553,15 @@ def build_tuning_advice(
     existing_analysis: Optional[Dict[str, Any]] = None,
     drone_size: str = "5",
     tuning_goal: str = "balanced",
+    pilot_feel: Any = None,
 ) -> Dict[str, Any]:
     """
-    Main public function.
+    Code label: PID DELTA TRANSLATOR.
+
+    Takes the analyzer evidence and converts it into conservative Betaflight
+    percentage deltas. It does not own pilot checkbox parsing; that belongs in
+    app/pilot_feel.py. The pilot-feel safety gate is applied at the end so hot
+    motors/RPM-filter issues can block unsafe D/D Max advice.
 
     Returns:
         tuning_advice dict suitable for API responses and frontend display.
@@ -573,7 +638,21 @@ def build_tuning_advice(
         ],
     }
 
+    _clamp_advice_axis_deltas(
+        advice,
+        reason=f"AeroTune one-pass safety cap: no PID term may move more than ±{MAX_SINGLE_PASS_DELTA_PERCENT}% in one recommendation.",
+    )
+    advice.setdefault("safety", []).append(
+        f"AeroTune caps every PID recommendation to ±{MAX_SINGLE_PASS_DELTA_PERCENT}% per test pass. Do not stack checkbox symptoms into bigger PID jumps."
+    )
+
     advice["betaflight_steps"] = _build_plain_english_steps(advice)
+    advice = apply_pilot_feel_to_tuning_advice(
+        advice=advice,
+        pilot_feel=pilot_feel,
+        existing_analysis=existing_analysis,
+        drone_size=drone_size,
+    )
     return advice
 
 
@@ -582,6 +661,7 @@ def attach_tuning_advice(
     df: Optional[pd.DataFrame],
     drone_size: str = "5",
     tuning_goal: str = "balanced",
+    pilot_feel: Any = None,
 ) -> Any:
     """
     Attach tuning advice to whatever the existing analyzer returns.
@@ -595,6 +675,7 @@ def attach_tuning_advice(
         existing_analysis=analysis if isinstance(analysis, dict) else None,
         drone_size=drone_size,
         tuning_goal=tuning_goal,
+        pilot_feel=pilot_feel,
     )
 
     if isinstance(analysis, dict):

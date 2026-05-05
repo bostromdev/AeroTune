@@ -44,10 +44,41 @@ AeroTune searches for `blackbox_decode` in this order:
 
 If you download AeroTune with the local `tools/blackbox-tools/obj/blackbox_decode` binary present, raw `.BBL` support can work immediately from the project folder. If the binary is missing, follow the setup instructions below or export CSV from Betaflight Blackbox Explorer.
 
+## V1.8 Pilot Flight Feel + Filtering Advisor
+
+AeroTune now lets the pilot select what the flight actually felt like during upload. These checkbox notes are combined with the Blackbox log to build a safer real-world plan.
+
+Examples of pilot-feel inputs:
+
+- Felt good / motors stayed cool
+- Loose, twitchy, delayed, propwash, bounceback, low-throttle wobble
+- Motors hot, buzzy, one motor sounded different, video jello
+- Dynamic Notch enabled/disabled
+- RPM filter caused issues or arming/failsafe warnings
+- PIDs, filters, props, or crash changed before the flight
+
+Filtering policy:
+
+```text
+Dynamic Notch = default AeroTune recommendation path
+RPM filtering = advanced-only, suppressed when the pilot reports RPM-filter, arming, or failsafe trouble
+Hot/buzzy motors = block positive D/D Max increases
+Good flight + cool motors + no active tuning symptom = protect the tune and save as baseline
+Active symptoms like loose/floaty, bounceback, propwash, twitchy feel, or weak tracking = bypass baseline hold and build a targeted plan
+```
+
+### Why this was added
+
+A Blackbox log can show frequency energy and tracking error, but it cannot always tell whether the quad felt good, motors were hot, or RPM filtering caused reliability issues. The pilot-feel layer prevents blind tuning advice. It helps AeroTune say “hold this good baseline” instead of chasing a perfect graph.
+
 ## Main Features
 
 - Single-log Blackbox analysis
 - PID Tuning Advice card
+- Pilot Flight Feel upload options
+- Filtering Advisor with Dynamic Notch default logic
+- RPM-filter suppression when reliability issues are reported
+- Size-aware D-term safety gates
 - Betaflight PID value calculator
 - Roll / pitch / yaw evidence display
 - Conservative percentage-based PID recommendations
@@ -157,3 +188,26 @@ If the converter is not found, use Betaflight Blackbox Explorer and export CSV.
 Built by **BostromDev**.
 
 YouTube: https://www.youtube.com/@BostromDev
+
+
+## Pilot Feel: Good Baseline Hold
+
+If a flight felt good and motors stayed cool, select **Felt good / no major issue**, **Motors stayed cool**, and optionally **Use this as a good baseline / hold current tune** during upload. AeroTune will keep PID deltas at 0% for that report and ask for another comparable log before recommending a correction. This prevents one hard Acro maneuver from being mistaken for a tune that needs aggressive D/D Max changes.
+
+If you also select an active symptom such as **Felt loose / floaty**, **Bounceback**, **Propwash**, **Felt twitchy / too sharp**, **Roll/pitch tracking feels delayed**, **Roll feels weak**, **Pitch feels weak**, or **Oscillation during throttle punches**, AeroTune bypasses the baseline hold and uses those symptoms with the log to build a targeted plan. The baseline hold is only for genuinely good/cool flights with no PID-relevant complaint.
+
+## V1.9 Tune-Change Tracking: Raw Flight Pair Selector
+
+For raw `.BBL`, `.BFL`, or `.TXT` logs that contain multiple flights, AeroTune can now decode the file once and compare two selected flights from the same raw log.
+
+Default behavior:
+
+```text
+2 flights total  -> before = Flight 1/2, after = Flight 2/2
+6 flights total  -> before = Flight 5/6, after = Flight 6/6
+```
+
+The pilot can override both selectors before running the report. The UI labels the first selector as **Before recommendations / baseline flight** and the second selector as **After change flight**.
+
+Tune-change tracking now also includes structured **Tune Change Details** checkboxes for PID changes, filtering changes, rates/throttle feel, hardware/setup changes, and test conditions. These options are context only; they do not stack into giant PID recommendations. AeroTune caps final PID percentage advice to ±11% per test pass.
+
