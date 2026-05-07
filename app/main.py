@@ -54,6 +54,10 @@ MAX_UPLOAD_SIZE_BYTES = 250 * 1024 * 1024
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+DOCS_DIR = Path("docs")
+if DOCS_DIR.exists():
+    app.mount("/docs", StaticFiles(directory=str(DOCS_DIR)), name="docs")
+
 
 def error_response(message: str, status_code: int = 400, **extra):
     payload = {"error": message}

@@ -4,6 +4,17 @@
 
 AeroTune reads Betaflight Blackbox flight-log data and turns gyro/setpoint behavior into conservative tuning guidance. It is built to help pilots understand symptoms like overshoot, bounceback, propwash, tracking error, and noisy D-term behavior without pretending to generate a perfect automatic tune.
 
+
+## Phase 1 Platform UI
+
+AeroTune now uses a cleaner Home Hub structure instead of putting every control on one screen. The frontend keeps the existing FastAPI backend and analyzer logic, but separates user intent into dedicated views:
+
+```text
+Home Hub -> Tune Analysis -> Tune Tracking -> Pilot Performance -> Blackbox Tools -> Advanced Diagnostics -> Docs
+```
+
+This is intentionally a lightweight hash-routed frontend split, not a framework rewrite. The goal is to reduce clutter while preserving engineering detail. Parser reports, converter reports, machine output, and comparison internals are still available behind advanced panels instead of being forced into the main tuning workflow.
+
 ## Current Best Workflow
 
 AeroTune supports two practical workflows:

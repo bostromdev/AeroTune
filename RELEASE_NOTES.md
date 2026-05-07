@@ -1,5 +1,30 @@
 # AeroTune Release Notes
 
+## Phase 1 Platform UI — Home Hub + Dedicated Tool Views
+
+### Summary
+
+This update reorganizes the frontend from one overloaded analyzer page into a scalable AeroTune workstation layout. The backend analyzer logic remains intact; the UI now separates workflows by intent.
+
+### What Changed
+
+- Added a Home Hub entry screen with clear cards for Tune Analysis, Tune Change Tracking, Pilot Performance, Blackbox Tools, Advanced Diagnostics, and Docs.
+- Added hash-routed tool views using plain JavaScript instead of adding a heavy frontend framework.
+- Moved the normal upload/recommendation workflow into a dedicated Tune Analysis page.
+- Moved raw multi-flight tune-change validation into a dedicated Tune Tracking page.
+- Moved converter, optimizer, parser, and file-prep tools into Blackbox Tools.
+- Added a Pilot Performance planning page with the five intended style profiles.
+- Added an Advanced Diagnostics planning page for future FFT/noise, GPS, and filter tooling.
+- Preserved parser reports, machine output, comparison output, and other engineering details inside expandable advanced panels.
+- Stopped the old UI cleanup script from hiding cards that are now intentionally organized into separate views.
+- Mounted the local `docs/` folder at `/docs` so the Docs view can open included markdown guides while the app is running.
+
+### Design Reason
+
+AeroTune is becoming a full FPV flight-analysis platform, not a generic PID calculator. This layout keeps beginners comfortable while keeping advanced diagnostics available for serious tuning work.
+
+---
+
 ## V1.5.4 — Tune-Change Tracking Workflow + Pilot/Data Verdicts
 
 ### Summary

@@ -86,6 +86,12 @@ Adds a professional creator section with YouTube link.
       </div>
     `;
 
+    const explicitMount = document.getElementById("creatorCardMount");
+    if (explicitMount) {
+      explicitMount.appendChild(card);
+      return;
+    }
+
     const main =
       document.querySelector("main") ||
       document.querySelector(".container") ||

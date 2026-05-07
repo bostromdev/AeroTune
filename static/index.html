@@ -531,13 +531,305 @@
       line-height: 1.45;
     }
 
+
+
+    /* AeroTune Phase 1 platform shell: Home Hub -> dedicated tool views. */
+    .app-shell {
+      min-height: 100vh;
+    }
+
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin: 0 0 18px;
+      padding: 10px;
+      border: 1px solid rgba(99, 214, 255, 0.16);
+      border-radius: 18px;
+      background: rgba(7, 16, 20, 0.82);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.18);
+    }
+
+    .nav-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 8px 12px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+    }
+
+    .nav-link:hover,
+    .nav-link.active {
+      color: var(--text);
+      border-color: rgba(99, 214, 255, 0.32);
+      background: rgba(99, 214, 255, 0.1);
+    }
+
+    .tool-view {
+      display: none;
+      animation: viewIn 180ms ease-out;
+    }
+
+    .tool-view.is-active {
+      display: block;
+    }
+
+    @keyframes viewIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .hero-card,
+    .view-intro,
+    .system-strip {
+      border: 1px solid var(--line);
+      background: linear-gradient(135deg, rgba(20, 36, 45, 0.94), rgba(10, 19, 24, 0.92));
+      border-radius: 24px;
+      padding: 24px;
+      box-shadow: 0 22px 70px rgba(0, 0, 0, 0.22);
+    }
+
+    .hero-card {
+      margin-bottom: 16px;
+    }
+
+    .view-intro {
+      margin-bottom: 16px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .hero-title {
+      font-size: clamp(30px, 6vw, 58px);
+      letter-spacing: -0.06em;
+      line-height: 0.96;
+      max-width: 860px;
+    }
+
+    .hero-copy,
+    .view-copy {
+      max-width: 880px;
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .hub-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .hub-card {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 220px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 18px;
+      background: rgba(16, 27, 34, 0.88);
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.16);
+    }
+
+    .hub-card h3 {
+      font-size: 18px;
+      color: var(--text);
+    }
+
+    .hub-card p {
+      margin: 8px 0 12px;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 13px;
+    }
+
+    .hub-card ul,
+    .docs-list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .route-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 42px;
+      margin-top: 14px;
+      border: 1px solid rgba(99, 214, 255, 0.38);
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: linear-gradient(135deg, #15566a, #12313e);
+      color: var(--text);
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .route-button.secondary-route {
+      background: #0d171d;
+      color: var(--accent);
+    }
+
+    .tool-page-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .single-column-stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .dynamic-results {
+      margin-bottom: 16px;
+    }
+
+    .advanced-details {
+      border: 1px solid rgba(99, 214, 255, 0.18);
+      border-radius: 18px;
+      background: rgba(12, 23, 29, 0.74);
+      margin-top: 16px;
+      overflow: hidden;
+    }
+
+    .advanced-details summary {
+      cursor: pointer;
+      padding: 14px 16px;
+      color: var(--accent);
+      font-weight: 900;
+      list-style-position: inside;
+    }
+
+    .advanced-details-body {
+      padding: 0 16px 16px;
+    }
+
+    .system-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+      padding: 16px;
+    }
+
+    .system-note {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 13px;
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .system-note b {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--text);
+    }
+
+    .style-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .style-card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 13px;
+      background: rgba(16, 27, 34, 0.74);
+    }
+
+    .style-card strong {
+      display: block;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .status-tag {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid rgba(255, 202, 95, 0.28);
+      border-radius: 999px;
+      padding: 5px 9px;
+      color: var(--warn);
+      background: rgba(255, 202, 95, 0.08);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .docs-card-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .doc-link-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      background: rgba(16, 27, 34, 0.78);
+    }
+
+    .doc-link-card h3 {
+      color: var(--text);
+      font-size: 16px;
+    }
+
+    .doc-link-card p {
+      margin: 8px 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
     .hidden { display: none; }
+
+    @media (max-width: 1040px) {
+      .hub-grid,
+      .style-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .tool-page-grid { grid-template-columns: 1fr; }
+      .system-strip { grid-template-columns: 1fr; }
+    }
 
     @media (max-width: 860px) {
       .wrap { padding: 16px; }
       header { display: block; }
       .status-pill { margin-top: 14px; }
+      .top-nav { position: static; }
+      .nav-link { flex: 1 1 auto; }
       .grid { grid-template-columns: 1fr; }
+      .hub-grid,
+      .style-grid,
+      .docs-card-grid { grid-template-columns: 1fr; }
+      .hero-card,
+      .view-intro { padding: 18px; }
       .metric-grid { grid-template-columns: 1fr; }
       .report { grid-template-columns: 1fr; }
       .useful-summary { grid-template-columns: 1fr; }
@@ -555,16 +847,135 @@
         <div>
           <h1>AeroTune</h1>
           <div class="sub">
-            FPV Blackbox analyzer with automatic raw-log conversion:
-            upload CSV directly, or upload .BBL/.BFL/.TXT and AeroTune converts it to CSV before analysis.
+            FPV Blackbox tuning workstation for conservative PID deltas, before/after validation,
+            pilot feel correlation, and future GPS-enhanced flight analytics.
           </div>
         </div>
       </div>
-      <div class="status-pill"><span class="dot"></span> Local analyzer ready • Render build: raw-log UI</div>
+      <div class="status-pill"><span class="dot"></span> Engineering hub ready • Local-first Blackbox workflow</div>
     </header>
 
-    <div class="grid">
-      <section>
+
+    <nav class="top-nav" aria-label="AeroTune tools">
+      <a class="nav-link" href="#home" data-route-link="home">Home Hub</a>
+      <a class="nav-link" href="#analyze" data-route-link="analyze">Tune Analysis</a>
+      <a class="nav-link" href="#track" data-route-link="track">Tune Tracking</a>
+      <a class="nav-link" href="#pilot" data-route-link="pilot">Pilot Performance</a>
+      <a class="nav-link" href="#blackbox" data-route-link="blackbox">Blackbox Tools</a>
+      <a class="nav-link" href="#diagnostics" data-route-link="diagnostics">Advanced Diagnostics</a>
+      <a class="nav-link" href="#docs" data-route-link="docs">Docs</a>
+    </nav>
+
+    <main id="aerotuneApp">
+      <section id="homeView" class="tool-view is-active" data-view="home">
+        <div class="hero-card">
+          <p class="eyebrow">FPV Blackbox engineering workstation</p>
+          <h2 class="hero-title">Tune smarter with real flight data.</h2>
+          <p class="hero-copy">
+            Upload Betaflight logs, validate before/after tune changes, connect pilot feel to Blackbox evidence,
+            and build toward style-aware and GPS-enhanced FPV analysis without crowding every control onto one screen.
+          </p>
+          <div class="chips">
+            <span class="chip good">Conservative PID deltas</span>
+            <span class="chip">Raw .BBL / .BFL support</span>
+            <span class="chip">Multi-flight selection</span>
+            <span class="chip warn">Local recommended for large logs</span>
+          </div>
+        </div>
+
+        <div class="hub-grid">
+          <article class="hub-card">
+            <div>
+              <h3>Analyze Tune</h3>
+              <p>Primary workflow for PID, D/D Max, feedforward, motor-heat-aware tuning guidance, and safe next-flight test plans.</p>
+              <ul>
+                <li>CSV or raw Blackbox upload</li>
+                <li>Drone-size-aware recommendations</li>
+                <li>Pilot feel notes included</li>
+              </ul>
+            </div>
+            <a class="route-button" href="#analyze">Start Tune Analysis</a>
+          </article>
+
+          <article class="hub-card">
+            <div>
+              <h3>Tune Change Tracking</h3>
+              <p>Compare before/after logs so tune changes are proven with data instead of memory or guesswork.</p>
+              <ul>
+                <li>Raw multi-flight pair selection</li>
+                <li>Before → after validation</li>
+                <li>Saved report workflow</li>
+              </ul>
+            </div>
+            <a class="route-button" href="#track">Compare Tune Changes</a>
+          </article>
+
+          <article class="hub-card">
+            <div>
+              <h3>Pilot Performance</h3>
+              <p>Planned separate analysis layer for Cinematic, Smooth Freestyle, Aggressive Freestyle, Racing, and Long Range flying styles.</p>
+              <span class="status-tag">Planning stage</span>
+            </div>
+            <a class="route-button secondary-route" href="#pilot">View Style System</a>
+          </article>
+
+          <article class="hub-card">
+            <div>
+              <h3>Blackbox Tools</h3>
+              <p>Keep conversion, optimization, parser reports, and file preparation separate from the main tuning screen.</p>
+              <ul>
+                <li>Raw conversion</li>
+                <li>CSV optimizer</li>
+                <li>Parser diagnostics</li>
+              </ul>
+            </div>
+            <a class="route-button" href="#blackbox">Open Blackbox Tools</a>
+          </article>
+
+          <article class="hub-card">
+            <div>
+              <h3>Advanced Diagnostics</h3>
+              <p>Future home for FFT/noise work, filter diagnostics, GPS-enhanced analysis, and high-rate logging tools.</p>
+              <span class="status-tag">Advanced / future</span>
+            </div>
+            <a class="route-button secondary-route" href="#diagnostics">View Diagnostics Plan</a>
+          </article>
+
+          <article class="hub-card">
+            <div>
+              <h3>Docs / Local Setup</h3>
+              <p>Guides for local running, raw Blackbox setup, logging rates, supporter access, and safe test-flight workflow.</p>
+              <ul>
+                <li>Hosted vs local clarity</li>
+                <li>Large-log guidance</li>
+                <li>Safe tuning workflow</li>
+              </ul>
+            </div>
+            <a class="route-button secondary-route" href="#docs">Open Docs</a>
+          </article>
+        </div>
+
+        <div class="system-strip">
+          <div class="system-note"><b>Beginner-safe flow</b><span class="small">Start with Tune Analysis, follow one conservative change, then retest.</span></div>
+          <div class="system-note"><b>Advanced detail preserved</b><span class="small">Parser reports, raw metrics, and machine output are still available behind expandable panels.</span></div>
+          <div class="system-note"><b>Hosted vs local reality</b><span class="small">Use the Render demo for small files. Use local mode for raw logs, large logs, and serious analysis.</span></div>
+        </div>
+
+        <div id="creatorCardMount"></div>
+      </section>
+
+      <section id="analyzeView" class="tool-view" data-view="analyze">
+        <div class="view-intro">
+          <p class="eyebrow">Primary workflow</p>
+          <h2>Analyze Tune</h2>
+          <p class="view-copy">
+            Use this page for the normal log → recommendation → test-flight loop. Advanced parser and machine outputs are still available,
+            but the first screen stays focused on the recommendation, suggested values, safety limits, and next flight.
+          </p>
+        </div>
+
+        <div class="tool-page-grid">
+          <section class="single-column-stack" aria-label="Tune analysis inputs">
         <div class="card">
           <h2>Analyzer Controls</h2>
           <p class="small">
@@ -612,43 +1023,64 @@
 
           <a id="downloadAnalyzed" class="hidden" href="/download-optimized">⬇ Download optimized CSV from this log</a>
         </div>
+          </section>
 
+          <section class="single-column-stack" aria-label="Tune analysis results">
+            <div id="results" class="dynamic-results"></div>
+            <details class="advanced-details" open>
+              <summary>Analysis summary</summary>
+              <div class="advanced-details-body">
         <div class="card">
-          <h2>Converter / CSV Optimizer</h2>
-          <p class="small">
-            CSV files are cleaned into AeroTune-ready columns. Raw .BBL/.BFL/.TXT Blackbox logs are automatically converted into CSV first, then cleaned into the same AeroTune-ready format.
+          <h2>Summary</h2>
+          <div class="metric-grid">
+            <div class="metric">
+              <div id="rowsMetric" class="num">—</div>
+              <div class="lbl">usable rows</div>
+            </div>
+            <div class="metric">
+              <div id="rateMetric" class="num">—</div>
+              <div class="lbl">sample rate</div>
+            </div>
+            <div class="metric">
+              <div id="durationMetric" class="num">—</div>
+              <div class="lbl">duration</div>
+            </div>
+          </div>
+          <div id="summary" class="message" style="margin-top:12px;">Upload a CSV, .BBL, .BFL, or .TXT Blackbox log to start analysis.</div>
+          <div id="usefulSummary" class="useful-summary"></div>
+        </div>
+              </div>
+            </details>
+            <details class="advanced-details">
+              <summary>Advanced / machine output</summary>
+              <div class="advanced-details-body">
+        <div class="card">
+          <h2>Pilot Tune Notes</h2>
+          <div class="chips">
+            <button class="secondary" id="copyCards" type="button">Copy Cards</button>
+            <button class="secondary" id="copyMachine" type="button">Copy Machine Notes</button>
+          </div>
+          <div id="axisCards"></div>
+          <h3 style="margin-top:16px;">Machine Output</h3>
+          <pre id="machineOutput">No analysis yet.</pre>
+        </div>
+              </div>
+            </details>
+          </section>
+        </div>
+      </section>
+
+      <section id="trackView" class="tool-view" data-view="track">
+        <div class="view-intro">
+          <p class="eyebrow">Validation workflow</p>
+          <h2>Tune Change Tracking</h2>
+          <p class="view-copy">
+            Use this page after you make a controlled change. It separates before/after validation from first-pass tune analysis so AeroTune can prove whether the quad actually improved.
           </p>
-
-          <form id="optimizeForm">
-            <label for="optimizerFile">CSV or Raw Blackbox Log To Convert</label>
-            <input id="optimizerFile" name="file" type="file" accept=".csv,.bbl,.bfl,.txt,text/csv" required />
-            <button id="optimizeBtn" type="submit">Convert / Download AeroTune CSV</button>
-          </form>
-
-          <div id="optimizerStatus" class="message">No converter/optimizer job yet. Upload CSV to clean it, or upload .BBL/.BFL/.TXT to convert it into CSV.</div>
         </div>
 
-        <div class="card">
-          <h2>V1.4 Before / After Comparison</h2>
-          <p class="small">
-            Upload a before-tune log and an after-tune log. Each file can be a Betaflight CSV export or a raw .BBL/.BFL/.TXT Blackbox log. Raw logs are converted to CSV automatically before comparison. Use V1.4 to prove the baseline got cleaner before switching to a style tune.
-          </p>
-
-          <form id="compareForm">
-            <label for="beforeLogFile">Before Tune Log</label>
-            <input id="beforeLogFile" name="before_file" type="file" accept=".csv,.bbl,.bfl,.txt,text/csv" required />
-
-            <label for="afterLogFile">After Tune Log</label>
-            <input id="afterLogFile" name="after_file" type="file" accept=".csv,.bbl,.bfl,.txt,text/csv" required />
-
-            <button id="compareBtn" type="submit">Compare Before → After</button>
-          </form>
-
-          <div id="compareStatus" class="message">No comparison yet.</div>
-        </div>
-
-
-
+        <div class="tool-page-grid">
+          <section class="single-column-stack" aria-label="Tune tracking inputs">
         <div class="card">
           <h2>V1.9 Tune-Change Tracking</h2>
           <p class="small">
@@ -694,54 +1126,32 @@
 
           <div id="trackStatus" class="message">No tune-change report yet.</div>
         </div>
-
+            <details class="advanced-details">
+              <summary>Manual before/after comparison</summary>
+              <div class="advanced-details-body">
         <div class="card">
-          <h2>Converter Report</h2>
-          <div id="converterStatus" class="message">Waiting for upload.</div>
-          <div id="converterReport" class="report"></div>
-          <div id="converterWarnings" class="chips"></div>
-          <div id="converterSuggestions" class="chips"></div>
+          <h2>V1.4 Before / After Comparison</h2>
+          <p class="small">
+            Upload a before-tune log and an after-tune log. Each file can be a Betaflight CSV export or a raw .BBL/.BFL/.TXT Blackbox log. Raw logs are converted to CSV automatically before comparison. Use V1.4 to prove the baseline got cleaner before switching to a style tune.
+          </p>
+
+          <form id="compareForm">
+            <label for="beforeLogFile">Before Tune Log</label>
+            <input id="beforeLogFile" name="before_file" type="file" accept=".csv,.bbl,.bfl,.txt,text/csv" required />
+
+            <label for="afterLogFile">After Tune Log</label>
+            <input id="afterLogFile" name="after_file" type="file" accept=".csv,.bbl,.bfl,.txt,text/csv" required />
+
+            <button id="compareBtn" type="submit">Compare Before → After</button>
+          </form>
+
+          <div id="compareStatus" class="message">No comparison yet.</div>
         </div>
+              </div>
+            </details>
+          </section>
 
-        <div class="card">
-          <h2>Parser Report</h2>
-          <div id="parserStatus" class="message">Waiting for upload.</div>
-          <div id="parserReport" class="report"></div>
-          <div id="parserWarnings" class="chips"></div>
-          <div id="parserSuggestions" class="chips"></div>
-        </div>
-      </section>
-
-      <section>
-        <div class="card">
-          <h2>Summary</h2>
-          <div class="metric-grid">
-            <div class="metric">
-              <div id="rowsMetric" class="num">—</div>
-              <div class="lbl">usable rows</div>
-            </div>
-            <div class="metric">
-              <div id="rateMetric" class="num">—</div>
-              <div class="lbl">sample rate</div>
-            </div>
-            <div class="metric">
-              <div id="durationMetric" class="num">—</div>
-              <div class="lbl">duration</div>
-            </div>
-          </div>
-          <div id="summary" class="message" style="margin-top:12px;">Upload a CSV, .BBL, .BFL, or .TXT Blackbox log to start analysis.</div>
-          <div id="usefulSummary" class="useful-summary"></div>
-        </div>
-
-        <div class="card">
-          <h2>V1.4 Comparison Result</h2>
-          <div id="comparisonResult" class="message">Upload before/after logs to compare tune changes.</div>
-          <div id="comparisonPanel" class="comparison-panel"></div>
-          <h3 style="margin-top:16px;">Comparison Machine Output</h3>
-          <pre id="comparisonMachineOutput">No comparison yet.</pre>
-        </div>
-
-
+          <section class="single-column-stack" aria-label="Tune tracking results">
         <div class="card">
           <h2>V1.5 Tune-Change Result</h2>
           <div id="trackingResult" class="message">Upload before/after logs and describe the tune change to track whether it helped.</div>
@@ -749,20 +1159,198 @@
           <h3 style="margin-top:16px;">Tune-Change Machine Output</h3>
           <pre id="trackingMachineOutput">No tune-change report yet.</pre>
         </div>
-
+            <details class="advanced-details" open>
+              <summary>Before/after comparison result</summary>
+              <div class="advanced-details-body">
         <div class="card">
-          <h2>Pilot Tune Notes</h2>
-          <div class="chips">
-            <button class="secondary" id="copyCards" type="button">Copy Cards</button>
-            <button class="secondary" id="copyMachine" type="button">Copy Machine Notes</button>
-          </div>
-          <div id="axisCards"></div>
-          <h3 style="margin-top:16px;">Machine Output</h3>
-          <pre id="machineOutput">No analysis yet.</pre>
+          <h2>V1.4 Comparison Result</h2>
+          <div id="comparisonResult" class="message">Upload before/after logs to compare tune changes.</div>
+          <div id="comparisonPanel" class="comparison-panel"></div>
+          <h3 style="margin-top:16px;">Comparison Machine Output</h3>
+          <pre id="comparisonMachineOutput">No comparison yet.</pre>
+        </div>
+              </div>
+            </details>
+          </section>
         </div>
       </section>
-    </div>
+
+      <section id="pilotView" class="tool-view" data-view="pilot">
+        <div class="view-intro">
+          <p class="eyebrow">Separate from PID recommendations</p>
+          <h2>Pilot Performance</h2>
+          <p class="view-copy">
+            This area is intentionally separate from Tune Analysis. The future system should answer how the pilot is flying and how well that flight matches the intended style — not blindly stack extra PID changes.
+          </p>
+          <div class="chips">
+            <span class="chip">Throttle smoothness</span>
+            <span class="chip">Stick control</span>
+            <span class="chip">Recovery quality</span>
+            <span class="chip">Propwash handling</span>
+            <span class="chip">GPS efficiency later</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+            <div>
+              <h2>Style profile framework</h2>
+              <p class="small">These profiles are staged for implementation after the UI split. They should bias interpretation, not override safety or clean-baseline gates.</p>
+            </div>
+            <span class="status-tag">Not wired to backend yet</span>
+          </div>
+          <div class="style-grid">
+            <div class="style-card"><strong>Cinematic</strong><span class="small">Smooth throttle, stable attitude, low wobble, efficient motion.</span></div>
+            <div class="style-card"><strong>Smooth Freestyle</strong><span class="small">Flow, controlled tricks, clean recovery, balanced stick feel.</span></div>
+            <div class="style-card"><strong>Aggressive Freestyle</strong><span class="small">Snap response, hard stops, strong propwash recovery, heat-aware limits.</span></div>
+            <div class="style-card"><strong>Racing</strong><span class="small">Precision, line holding, low latency, high-speed turn stability.</span></div>
+            <div class="style-card"><strong>Long Range / Cruising</strong><span class="small">Efficiency, smooth load management, GPS speed and battery use.</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="blackboxView" class="tool-view" data-view="blackbox">
+        <div class="view-intro">
+          <p class="eyebrow">File preparation and inspection</p>
+          <h2>Blackbox Tools</h2>
+          <p class="view-copy">
+            Conversion, optimization, and parser inspection live here so the main analyzer remains clean. This is where users prep logs before serious tuning work.
+          </p>
+        </div>
+
+        <div class="tool-page-grid">
+          <section class="single-column-stack" aria-label="Blackbox conversion tools">
+        <div class="card">
+          <h2>Converter / CSV Optimizer</h2>
+          <p class="small">
+            CSV files are cleaned into AeroTune-ready columns. Raw .BBL/.BFL/.TXT Blackbox logs are automatically converted into CSV first, then cleaned into the same AeroTune-ready format.
+          </p>
+
+          <form id="optimizeForm">
+            <label for="optimizerFile">CSV or Raw Blackbox Log To Convert</label>
+            <input id="optimizerFile" name="file" type="file" accept=".csv,.bbl,.bfl,.txt,text/csv" required />
+            <button id="optimizeBtn" type="submit">Convert / Download AeroTune CSV</button>
+          </form>
+
+          <div id="optimizerStatus" class="message">No converter/optimizer job yet. Upload CSV to clean it, or upload .BBL/.BFL/.TXT to convert it into CSV.</div>
+        </div>
+          </section>
+          <section class="single-column-stack" aria-label="Blackbox reports">
+            <details class="advanced-details" open>
+              <summary>Converter report</summary>
+              <div class="advanced-details-body">
+        <div class="card">
+          <h2>Converter Report</h2>
+          <div id="converterStatus" class="message">Waiting for upload.</div>
+          <div id="converterReport" class="report"></div>
+          <div id="converterWarnings" class="chips"></div>
+          <div id="converterSuggestions" class="chips"></div>
+        </div>
+              </div>
+            </details>
+            <details class="advanced-details" open>
+              <summary>Parser report</summary>
+              <div class="advanced-details-body">
+        <div class="card">
+          <h2>Parser Report</h2>
+          <div id="parserStatus" class="message">Waiting for upload.</div>
+          <div id="parserReport" class="report"></div>
+          <div id="parserWarnings" class="chips"></div>
+          <div id="parserSuggestions" class="chips"></div>
+        </div>
+              </div>
+            </details>
+          </section>
+        </div>
+      </section>
+
+      <section id="diagnosticsView" class="tool-view" data-view="diagnostics">
+        <div class="view-intro">
+          <p class="eyebrow">Advanced and future systems</p>
+          <h2>Advanced Diagnostics</h2>
+          <p class="view-copy">
+            This page keeps experimental and high-detail tools away from the primary workflow until they are mature. Safety warnings should always override style goals here.
+          </p>
+        </div>
+
+        <div class="hub-grid">
+          <article class="hub-card"><div><h3>FFT / Noise Analysis</h3><p>Future frequency-domain diagnostics for gyro noise, D-term noise, and filter decisions.</p><span class="status-tag">Planned</span></div></article>
+          <article class="hub-card"><div><h3>GPS Flight Analytics</h3><p>Future speed-aware analysis, efficiency scoring, mAh per distance, and rescue validation.</p><span class="status-tag">Planned</span></div></article>
+          <article class="hub-card"><div><h3>Filter Diagnostic Tool</h3><p>Future guidance for dynamic notch, RPM filtering risk, and high-rate logging interpretation.</p><span class="status-tag">Planned</span></div></article>
+        </div>
+      </section>
+
+      <section id="docsView" class="tool-view" data-view="docs">
+        <div class="view-intro">
+          <p class="eyebrow">Setup, workflow, and safety</p>
+          <h2>Docs / Learn</h2>
+          <p class="view-copy">
+            Keep setup instructions and tuning education out of the tool screens. These links are served from the local <code>docs/</code> folder when the FastAPI app is running.
+          </p>
+        </div>
+
+        <div class="docs-card-grid">
+          <article class="doc-link-card"><h3>Install / Run Guide</h3><p>Local setup, Python environment, and running the site.</p><a class="route-button secondary-route" href="/docs/AeroTune_Install_Run_Guide.md" target="_blank" rel="noopener">Open guide</a></article>
+          <article class="doc-link-card"><h3>PID Tuning Guide</h3><p>Safe interpretation of recommendations and field-test workflow.</p><a class="route-button secondary-route" href="/docs/AeroTune_PID_Tuning_Guide.md" target="_blank" rel="noopener">Open guide</a></article>
+          <article class="doc-link-card"><h3>Pilot Feel Logic</h3><p>How pilot notes influence tuning without replacing Blackbox evidence.</p><a class="route-button secondary-route" href="/docs/PILOT_FEEL_FILTERING_LOGIC.md" target="_blank" rel="noopener">Open notes</a></article>
+          <article class="doc-link-card"><h3>Tune Change Pair Tracking</h3><p>Before/after workflow for validating whether a change helped.</p><a class="route-button secondary-route" href="/docs/TUNE_CHANGE_PAIR_TRACKING.md" target="_blank" rel="noopener">Open notes</a></article>
+          <article class="doc-link-card"><h3>UI Redesign Phase 1</h3><p>Implementation notes for the Home Hub and dedicated tool-view split.</p><a class="route-button secondary-route" href="/docs/UI_REDESIGN_PHASE_1.md" target="_blank" rel="noopener">Open notes</a></article>
+          <article class="doc-link-card"><h3>Platform Planning Docs</h3><p>Current state, site structure plan, and Pilot Performance style profiles from the workflow package.</p><a class="route-button secondary-route" href="/docs/planning/AeroTune_Site_Structure_Redesign_Plan.md" target="_blank" rel="noopener">Open redesign plan</a></article>
+        </div>
+      </section>
+    </main>
   </div>
+
+
+  <script>
+    (function () {
+      "use strict";
+
+      const DEFAULT_ROUTE = "home";
+      const ROUTES = new Set(["home", "analyze", "track", "pilot", "blackbox", "diagnostics", "docs"]);
+
+      function routeFromHash() {
+        const raw = String(window.location.hash || "").replace(/^#/, "").trim().toLowerCase();
+        return ROUTES.has(raw) ? raw : DEFAULT_ROUTE;
+      }
+
+      function setActiveRoute(route) {
+        const activeRoute = ROUTES.has(route) ? route : DEFAULT_ROUTE;
+
+        document.querySelectorAll("[data-view]").forEach((view) => {
+          view.classList.toggle("is-active", view.getAttribute("data-view") === activeRoute);
+        });
+
+        document.querySelectorAll("[data-route-link]").forEach((link) => {
+          const isActive = link.getAttribute("data-route-link") === activeRoute;
+          link.classList.toggle("active", isActive);
+          if (isActive) {
+            link.setAttribute("aria-current", "page");
+          } else {
+            link.removeAttribute("aria-current");
+          }
+        });
+      }
+
+      window.AeroTuneNavigate = function (route) {
+        const activeRoute = ROUTES.has(route) ? route : DEFAULT_ROUTE;
+        if (window.location.hash !== `#${activeRoute}`) {
+          window.location.hash = activeRoute;
+          return;
+        }
+        setActiveRoute(activeRoute);
+      };
+
+      window.addEventListener("hashchange", () => setActiveRoute(routeFromHash()));
+      setActiveRoute(routeFromHash());
+
+      document.getElementById("analyzeForm")?.addEventListener("submit", () => window.AeroTuneNavigate("analyze"));
+      document.getElementById("optimizeForm")?.addEventListener("submit", () => window.AeroTuneNavigate("blackbox"));
+      document.getElementById("compareForm")?.addEventListener("submit", () => window.AeroTuneNavigate("track"));
+      document.getElementById("rawTrackPrepareForm")?.addEventListener("submit", () => window.AeroTuneNavigate("track"));
+      document.getElementById("trackRawPairBtn")?.addEventListener("click", () => window.AeroTuneNavigate("track"));
+    })();
+  </script>
 
   <script>
     const analyzeForm = document.getElementById("analyzeForm");
